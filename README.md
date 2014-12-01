@@ -10,4 +10,4 @@ Bambi? That wimpy deer?
 
  I told you! I spent it with my uncle in Alaska hunting wolverines!
 
-.
+Naplean Dynamite is the movie 
