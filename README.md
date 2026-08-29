@@ -122,7 +122,7 @@ Once a day is also the Vercel Hobby plan's limit.
 
 Three guardrails run *before* the model, so an over-eager schedule costs
 nothing: don't nudge if one is already waiting, if you nudged in the last 20
-hours, or if the user was active in the last 3. Silence is the default — an
+hours, or if the user was active in the last 1. Silence is the default — an
 assistant that produces a nudge every day gets muted within a fortnight.
 
 A queued nudge is delivered on the next app open and becomes a real assistant

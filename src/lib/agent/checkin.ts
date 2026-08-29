@@ -9,8 +9,12 @@ import { pendingCheckins, recentHistory } from "@/lib/db/repo";
 
 /**
  * Don't nudge someone who is mid-conversation with you — they're already here.
+ *
+ * Deliberately short, because the cron only fires once a day: a wide window
+ * means a morning session silently costs that day's check-in entirely, with no
+ * later slot to catch it. An hour still covers "actively talking to her".
  */
-const QUIET_AFTER_ACTIVITY_HOURS = 3;
+const QUIET_AFTER_ACTIVITY_HOURS = 1;
 
 /** Roughly daily at most, regardless of how often the cron fires. */
 const MIN_HOURS_BETWEEN_CHECKINS = 20;
