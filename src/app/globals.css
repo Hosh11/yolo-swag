@@ -1,0 +1,58 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #0d0c0b;
+  --color-ink-soft: #161513;
+  --color-ink-line: #26231f;
+  --color-paper: #ece7de;
+  --color-paper-dim: #9b938a;
+  --color-paper-faint: #6a635b;
+  --color-ember: #d8a25c;
+
+  --font-sans: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+  --font-ui: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-paper);
+  font-family: var(--font-ui);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Wren's own words get the serif; everything chrome-ish stays sans. */
+.prose-wren {
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
+  line-height: 1.65;
+}
+
+.prose-wren p + p {
+  margin-top: 0.85em;
+}
+
+@keyframes breathe {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+
+.breathe {
+  animation: breathe 1.4s ease-in-out infinite;
+}
+
+textarea {
+  field-sizing: content;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-ink-line);
+  border-radius: 999px;
+}
