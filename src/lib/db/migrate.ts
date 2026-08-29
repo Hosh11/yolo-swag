@@ -85,9 +85,32 @@ const STATEMENTS = [
   `CREATE INDEX IF NOT EXISTS idx_history_created ON conversation_history(created_at)`,
 ];
 
+/**
+ * Postgres error codes for "someone else just created this".
+ *
+ * `CREATE TABLE IF NOT EXISTS` is idempotent but not atomic: two serverless
+ * cold starts racing on the first request after a deploy can both pass the
+ * existence check and then collide in the catalog. The statements are
+ * identical, so losing the race is a success, not a failure.
+ */
+const ALREADY_EXISTS = new Set([
+  "23505", // unique_violation, typically on pg_type
+  "42P07", // duplicate_table
+  "42710", // duplicate_object
+]);
+
+function isRace(error: unknown): boolean {
+  const code = (error as { code?: unknown })?.code;
+  return typeof code === "string" && ALREADY_EXISTS.has(code);
+}
+
 export async function migrate(db: Kysely<Database>): Promise<void> {
   for (const statement of STATEMENTS) {
-    await sql.raw(statement).execute(db);
+    try {
+      await sql.raw(statement).execute(db);
+    } catch (error) {
+      if (!isRace(error)) throw error;
+    }
   }
 }
 

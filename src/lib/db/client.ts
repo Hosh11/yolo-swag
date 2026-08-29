@@ -3,12 +3,59 @@ import type { Database } from "./schema";
 
 let dbPromise: Promise<Kysely<Database>> | null = null;
 
+const DEV_SQLITE_URL = "sqlite:./data/wren.sqlite";
+
+/** Hide credentials before a connection string reaches a log or an error. */
+function redact(url: string): string {
+  return url.replace(/\/\/[^@/]*@/, "//***@");
+}
+
 function databaseUrl(): string {
-  return process.env.DATABASE_URL ?? "sqlite:./data/wren.sqlite";
+  // Trimmed, because an env var set to "" in a dashboard is a very different
+  // thing from one that was never set — and `??` treats them the same. Left
+  // alone, the empty string falls through to the Postgres branch and `pg`
+  // quietly dials 127.0.0.1:5432, which is a nonsense default in production.
+  const configured = process.env.DATABASE_URL?.trim();
+  if (configured) return configured;
+
+  if (process.env.NODE_ENV === "production") {
+    throw new Error(
+      "DATABASE_URL is not set. Wren needs a Postgres connection string in " +
+        "production — add one under your host's environment variables and redeploy.",
+    );
+  }
+  return DEV_SQLITE_URL;
 }
 
 export function isSqlite(url = databaseUrl()): boolean {
   return url.startsWith("sqlite:") || url.startsWith("file:");
+}
+
+/**
+ * Fails loudly on connection strings that would otherwise produce a baffling
+ * runtime error — an unparseable URL becomes ECONNREFUSED on localhost, and
+ * SQLite on a serverless host silently loses every write.
+ */
+function assertUsable(url: string): void {
+  if (isSqlite(url)) {
+    // VERCEL rather than NODE_ENV: a self-hosted deployment with a real disk
+    // can use SQLite perfectly well, and that is also NODE_ENV=production.
+    if (process.env.VERCEL) {
+      throw new Error(
+        "DATABASE_URL points at SQLite, but this is running on Vercel, where " +
+          "the filesystem is ephemeral — every write would be lost between " +
+          "requests. Provision Postgres and set DATABASE_URL to its connection string.",
+      );
+    }
+    return;
+  }
+
+  if (!/^postgres(ql)?:\/\//.test(url)) {
+    throw new Error(
+      `DATABASE_URL is not a connection string Wren recognises (got "${redact(url)}"). ` +
+        "Use postgres://… in production, or sqlite:./path for local development.",
+    );
+  }
 }
 
 /** What Kysely's SqliteDialect needs, plus the pragmas we set. */
@@ -45,6 +92,7 @@ async function loadSqliteDriver(): Promise<SqliteDriver> {
 
 async function buildDialect(): Promise<Dialect> {
   const url = databaseUrl();
+  assertUsable(url);
 
   if (isSqlite(url)) {
     const [{ SqliteDialect }, { mkdirSync }, path] = await Promise.all([
