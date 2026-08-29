@@ -3,8 +3,8 @@
 A chief personal agent. Wren orchestrates the day and hands craft work off to
 sub-skills rather than doing everything herself.
 
-This is the first slice: **Wren, the writing sub-skill, the data layer, and a
-streaming chat UI.** Voice and the scheduler are deliberately not built yet.
+Wren, the writing sub-skill, the data layer, a streaming chat UI, voice, and
+the proactive scheduler.
 
 ## Stack
 
@@ -86,11 +86,50 @@ Both are 400s from the API, so `sanitize()` trims from both ends.
 the writing sub-skill (it drafts and critiques prose; she mostly talks). All
 three are environment variables.
 
+### Voice
+
+One toggle in the header. On: Wren reads her replies aloud, and a mic button
+appears in the composer.
+
+Speech is chunked at sentence boundaries as the reply streams, rather than
+waiting for the full response (a long dead pause before every answer) or
+speaking each token (stutter). She starts talking about as fast as a person
+would. Sending a new message cancels playback, so you can talk over her.
+
+Dictation is push-to-talk and fills the box without auto-sending —
+transcription is wrong often enough that firing off a misheard sentence costs
+more than the keypress saves. If the platform has an `en-GB` voice, it gets
+used; a Midwestern American reading her lines undercuts the character.
+
+`SpeechRecognition` is Chrome/Safari only. Where it is missing the mic hides
+itself and typing is unaffected.
+
+### The scheduler
+
+`GET /api/cron/checkin` wakes Wren, hands her the current state and the last
+few things she said, and asks whether anything is worth surfacing. She either
+calls `queue_checkin` once or answers `PASS`. The schedule lives in
+`vercel.json` (three times a day).
+
+Three guardrails run *before* the model, so an over-eager schedule costs
+nothing: don't nudge if one is already waiting, if you nudged in the last 20
+hours, or if the user was active in the last 3. Silence is the default — an
+assistant that produces a nudge every day gets muted within a fortnight.
+
+A queued nudge is delivered on the next app open and becomes a real assistant
+turn in the conversation, so Wren knows what she said and won't repeat it.
+
+Locally:
+
+```bash
+npm run cron:checkin      # ?force=1, skips the rate guards
+```
+
+`CRON_SECRET` gates the route. Unset in dev it's open; unset in production the
+route refuses to run rather than leaving a token-burning endpoint exposed.
+
 ## Not built yet
 
-- **Voice** — Web Speech API for speech-to-text and text-to-speech, as a toggle.
-- **Scheduler** — a cron job asking Wren "anything worth surfacing right now?".
-  The groundwork is in: the `checkins` table, the `queue_checkin` tool, and
-  delivery of queued nudges through the state snapshot. What's missing is the
-  job that runs it on a timer.
 - **Focus/timer sessions** for the writing sub-skill.
+- Everything is single-user with no auth. Don't deploy it on a public URL
+  without putting something in front of it.

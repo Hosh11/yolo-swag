@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { StreamEvent } from "@/lib/agent/types";
 import Composer from "./Composer";
 import ToolTrace, { type TraceStep } from "./ToolTrace";
+import { speechSupported, useSpeaker } from "@/lib/voice";
 
 interface Turn {
   id: string;
@@ -27,11 +28,40 @@ export default function Chat() {
   const [error, setError] = useState<string | null>(null);
   const [name, setName] = useState("");
   const [streak, setStreak] = useState<Streak | null>(null);
+  const [voice, setVoice] = useState(false);
+  // Feature detection has to happen after mount: the server has no `window`,
+  // so testing it during render renders a different tree than the client and
+  // React throws a hydration mismatch.
+  const [canSpeak, setCanSpeak] = useState(false);
 
   const bottom = useRef<HTMLDivElement>(null);
+  const speaker = useSpeaker(voice);
+
+  // Restore the voice preference before the first reply can arrive.
+  useEffect(() => {
+    setCanSpeak(speechSupported());
+    try {
+      setVoice(window.localStorage.getItem("wren:voice") === "on");
+    } catch {
+      // Private browsing and blocked site data both throw here; silence is fine.
+    }
+  }, []);
+
+  const toggleVoice = useCallback(() => {
+    setVoice((on) => {
+      const next = !on;
+      try {
+        window.localStorage.setItem("wren:voice", next ? "on" : "off");
+      } catch {
+        // Preference just won't persist; the toggle still works this session.
+      }
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
-    fetch("/api/state")
+    // `deliver=1` flushes anything the scheduler queued into the conversation.
+    fetch("/api/state?deliver=1")
       .then((r) => r.json())
       .then((data) => {
         setName(data.name);
@@ -57,6 +87,9 @@ export default function Chat() {
         ...prev,
         { id: `local-${Date.now()}`, role: "user", text },
       ]);
+
+      // Barge-in: a new message means stop reading the last one aloud.
+      speaker.cancel();
 
       const collected: TraceStep[] = [];
       let streamed = "";
@@ -98,6 +131,7 @@ export default function Chat() {
                 setThinking(false);
                 streamed += event.delta;
                 setDraftText(streamed);
+                speaker.push(event.delta);
                 break;
               case "tool_start":
                 collected.push({ id: event.id, label: event.label, state: "running" });
@@ -111,6 +145,7 @@ export default function Chat() {
               }
               case "done":
                 streamed = event.text || streamed;
+                speaker.flush();
                 break;
               case "error":
                 setError(event.message);
@@ -119,6 +154,7 @@ export default function Chat() {
           }
         }
       } catch (caught) {
+        speaker.cancel();
         setError(caught instanceof Error ? caught.message : "Something broke.");
       } finally {
         setThinking(false);
@@ -142,7 +178,7 @@ export default function Chat() {
           .catch(() => {});
       }
     },
-    [],
+    [speaker],
   );
 
   const empty = turns.length === 0 && !busy;
@@ -151,15 +187,32 @@ export default function Chat() {
     <div className="mx-auto flex h-dvh max-w-3xl flex-col px-5">
       <header className="flex shrink-0 items-baseline justify-between border-b border-ink-line py-4">
         <h1 className="prose-wren text-lg tracking-wide text-paper">Wren</h1>
-        {streak && (
-          <p className="text-xs text-paper-faint tabular-nums">
-            {streak.current > 0 ? `${streak.current}-day streak` : "no streak going"}
-            <span className="mx-2 text-ink-line">/</span>
-            {streak.wordsToday.toLocaleString()} today
-            <span className="mx-2 text-ink-line">/</span>
-            {streak.wordsLast7.toLocaleString()} this week
-          </p>
-        )}
+        <div className="flex items-center gap-4">
+          {streak && (
+            <p className="text-xs text-paper-faint tabular-nums">
+              {streak.current > 0 ? `${streak.current}-day streak` : "no streak going"}
+              <span className="mx-2 text-ink-line">/</span>
+              {streak.wordsToday.toLocaleString()} today
+              <span className="mx-2 text-ink-line">/</span>
+              {streak.wordsLast7.toLocaleString()} this week
+            </p>
+          )}
+          {canSpeak && (
+            <button
+              type="button"
+              onClick={toggleVoice}
+              aria-pressed={voice}
+              title={voice ? "Voice on — Wren reads replies aloud" : "Voice off"}
+              className={`rounded-lg border px-2 py-1 text-xs tracking-wide transition ${
+                voice
+                  ? "border-ember/40 text-ember"
+                  : "border-ink-line text-paper-faint hover:text-paper-dim"
+              } ${speaker.speaking ? "breathe" : ""}`}
+            >
+              voice {voice ? "on" : "off"}
+            </button>
+          )}
+        </div>
       </header>
 
       <div className="flex-1 space-y-7 overflow-y-auto py-8">
@@ -203,7 +256,7 @@ export default function Chat() {
         <div ref={bottom} />
       </div>
 
-      <Composer onSend={send} disabled={busy} />
+      <Composer onSend={send} disabled={busy} voiceEnabled={voice} />
     </div>
   );
 }

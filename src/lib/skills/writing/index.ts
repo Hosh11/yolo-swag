@@ -41,7 +41,11 @@ export async function runWritingAssistant(input: {
     const message = await client.messages.create({
       model: MODEL,
       max_tokens: 16000,
-      system: WRITING_SYSTEM,
+      // Stable across every hop and every delegation, so it's worth a
+      // breakpoint — this loop re-sends it on each iteration.
+      system: [
+        { type: "text", text: WRITING_SYSTEM, cache_control: { type: "ephemeral" } },
+      ],
       thinking: { type: "adaptive" },
       output_config: { effort: WRITING_EFFORT },
       tools: WRITING_TOOLS.map((t) => t.def),
