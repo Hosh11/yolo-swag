@@ -116,6 +116,12 @@ itself and typing is unaffected.
 few things she said, and asks whether anything is worth surfacing. She either
 calls `queue_checkin` once or answers `PASS`.
 
+`vercel.json` also pins `"framework": "nextjs"`. Vercel's auto-detection runs
+when the project is first connected, so a repo that had no Next.js app at that
+moment gets stuck on the "Other" preset and fails the build looking for a
+`public/` directory. Declaring it in the repo makes it independent of when the
+project happened to be created.
+
 The schedule lives in `vercel.json`: `0 12 * * *`, once a day. **Vercel cron
 schedules are always UTC**, and it has no timezone field, so local time is
 whatever the conversion works out to — `WREN_TIMEZONE` governs streak day
