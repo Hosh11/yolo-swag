@@ -108,8 +108,17 @@ itself and typing is unaffected.
 
 `GET /api/cron/checkin` wakes Wren, hands her the current state and the last
 few things she said, and asks whether anything is worth surfacing. She either
-calls `queue_checkin` once or answers `PASS`. The schedule lives in
-`vercel.json` (three times a day).
+calls `queue_checkin` once or answers `PASS`.
+
+The schedule lives in `vercel.json`: `0 12 * * *`, once a day. **Vercel cron
+schedules are always UTC**, and it has no timezone field, so local time is
+whatever the conversion works out to — `WREN_TIMEZONE` governs streak day
+boundaries and has no effect here. 12:00 UTC is 08:00 EDT in summer and 07:00
+EST in winter, which keeps the check-in in the morning year-round without
+touching it at the DST switch. Pick a different hour and remember it will
+drift an hour twice a year.
+
+Once a day is also the Vercel Hobby plan's limit.
 
 Three guardrails run *before* the model, so an over-eager schedule costs
 nothing: don't nudge if one is already waiting, if you nudged in the last 20
