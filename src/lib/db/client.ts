@@ -1,4 +1,4 @@
-import { Kysely, type Dialect } from "kysely";
+import { Kysely, type Dialect, type SqliteDatabase } from "kysely";
 import type { Database } from "./schema";
 
 let dbPromise: Promise<Kysely<Database>> | null = null;
@@ -11,24 +11,52 @@ export function isSqlite(url = databaseUrl()): boolean {
   return url.startsWith("sqlite:") || url.startsWith("file:");
 }
 
+/** What Kysely's SqliteDialect needs, plus the pragmas we set. */
+type SqliteDriver = new (file: string) => SqliteDatabase & {
+  pragma(statement: string): unknown;
+};
+
+/**
+ * Loads better-sqlite3 without letting the bundler see the specifier.
+ *
+ * A literal `import("better-sqlite3")` is resolved at BUILD time even though it
+ * only ever executes on the SQLite branch, so a Postgres deployment installed
+ * without devDependencies fails to build with module-not-found. Resolving
+ * through createRequire with a non-literal specifier defers it to runtime,
+ * by which point the branch needing it has already been taken.
+ *
+ * It is also an optionalDependency: a native module that fails to compile on a
+ * production image should not take the whole install down with it.
+ */
+async function loadSqliteDriver(): Promise<SqliteDriver> {
+  const { createRequire } = await import("node:module");
+  const specifier = "better-sqlite3";
+  try {
+    return createRequire(import.meta.url)(specifier) as SqliteDriver;
+  } catch (cause) {
+    throw new Error(
+      "DATABASE_URL points at SQLite, but better-sqlite3 is not installed. " +
+        "It is an optional dependency for local development — run `npm install` " +
+        "without --omit=optional, or point DATABASE_URL at postgres://.",
+      { cause },
+    );
+  }
+}
+
 async function buildDialect(): Promise<Dialect> {
   const url = databaseUrl();
 
   if (isSqlite(url)) {
-    // Dev only. Imported dynamically so a Postgres deploy never has to have the
-    // native module installed (it lives in devDependencies).
-    const [{ SqliteDialect }, BetterSqlite3, { mkdirSync }, path] =
-      await Promise.all([
-        import("kysely"),
-        import("better-sqlite3"),
-        import("node:fs"),
-        import("node:path"),
-      ]);
+    const [{ SqliteDialect }, { mkdirSync }, path] = await Promise.all([
+      import("kysely"),
+      import("node:fs"),
+      import("node:path"),
+    ]);
 
     const file = url.replace(/^(sqlite|file):(\/\/)?/, "");
     mkdirSync(path.dirname(path.resolve(file)), { recursive: true });
 
-    const database = new BetterSqlite3.default(file);
+    const database = new (await loadSqliteDriver())(file);
     database.pragma("journal_mode = WAL");
     database.pragma("foreign_keys = ON");
     return new SqliteDialect({ database });

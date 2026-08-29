@@ -72,6 +72,12 @@ So there's one set of DDL and one set of queries. The cost is losing native date
 and JSON operators; the benefit is no second schema to keep in sync. Swap
 `DATABASE_URL` and the driver switches itself.
 
+`better-sqlite3` is an **optional** dependency, and it is loaded through
+`createRequire` with a non-literal specifier rather than a plain dynamic
+import. Both are deliberate: a literal `import()` is resolved at build time
+even on a branch that never runs in production, so a Postgres deploy would
+fail to build without the native SQLite module installed.
+
 ### Conversation history
 
 Full Anthropic content blocks are persisted, not just text — thinking blocks and
