@@ -10,18 +10,37 @@ function redact(url: string): string {
   return url.replace(/\/\/[^@/]*@/, "//***@");
 }
 
+/**
+ * Connection-string variables, in order of preference.
+ *
+ * DATABASE_URL is what this project documents, but Vercel's Postgres and Neon
+ * integrations provision POSTGRES_URL instead, so accepting both saves a
+ * baffling "not set" error next to a database that plainly exists. The pooled
+ * URL comes first deliberately: serverless opens many short-lived connections
+ * and would exhaust a direct connection limit.
+ */
+const URL_VARS = [
+  "DATABASE_URL",
+  "POSTGRES_URL",
+  "POSTGRES_PRISMA_URL",
+  "POSTGRES_URL_NON_POOLING",
+] as const;
+
 function databaseUrl(): string {
   // Trimmed, because an env var set to "" in a dashboard is a very different
   // thing from one that was never set — and `??` treats them the same. Left
   // alone, the empty string falls through to the Postgres branch and `pg`
   // quietly dials 127.0.0.1:5432, which is a nonsense default in production.
-  const configured = process.env.DATABASE_URL?.trim();
-  if (configured) return configured;
+  for (const name of URL_VARS) {
+    const configured = process.env[name]?.trim();
+    if (configured) return configured;
+  }
 
   if (process.env.NODE_ENV === "production") {
     throw new Error(
-      "DATABASE_URL is not set. Wren needs a Postgres connection string in " +
-        "production — add one under your host's environment variables and redeploy.",
+      `No database connection string found. Wren looked at ${URL_VARS.join(", ")} ` +
+        "and they are all unset or empty. Provision Postgres and set DATABASE_URL " +
+        "to its connection string, then redeploy.",
     );
   }
   return DEV_SQLITE_URL;
@@ -115,7 +134,13 @@ async function buildDialect(): Promise<Dialect> {
     import("pg"),
   ]);
   return new PostgresDialect({
-    pool: new pg.default.Pool({ connectionString: url, max: 10 }),
+    pool: new pg.default.Pool({
+      connectionString: url,
+      // Each serverless instance gets its own pool, so this multiplies across
+      // however many are warm. Small keeps it under a free tier's ceiling.
+      max: process.env.VERCEL ? 2 : 10,
+      connectionTimeoutMillis: 10_000,
+    }),
   });
 }
 

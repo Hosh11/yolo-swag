@@ -72,6 +72,10 @@ So there's one set of DDL and one set of queries. The cost is losing native date
 and JSON operators; the benefit is no second schema to keep in sync. Swap
 `DATABASE_URL` and the driver switches itself.
 
+On Vercel, `DATABASE_URL` is read first, then `POSTGRES_URL` — the Postgres and
+Neon integrations provision the latter, and the pooled URL is preferred because
+serverless opens many short-lived connections.
+
 `better-sqlite3` is an **optional** dependency, and it is loaded through
 `createRequire` with a non-literal specifier rather than a plain dynamic
 import. Both are deliberate: a literal `import()` is resolved at build time
