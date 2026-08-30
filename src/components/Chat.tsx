@@ -48,16 +48,17 @@ export default function Chat() {
   }, []);
 
   const toggleVoice = useCallback(() => {
-    setVoice((on) => {
-      const next = !on;
-      try {
-        window.localStorage.setItem("wren:voice", next ? "on" : "off");
-      } catch {
-        // Preference just won't persist; the toggle still works this session.
-      }
-      return next;
-    });
-  }, []);
+    const next = !voice;
+    setVoice(next);
+    try {
+      window.localStorage.setItem("wren:voice", next ? "on" : "off");
+    } catch {
+      // Preference just won't persist; the toggle still works this session.
+    }
+    // Must run synchronously, right here in the tap — not in the state
+    // updater above, and not after any await. See speakNow's comment.
+    if (next) speaker.speakNow("Voice on.");
+  }, [voice, speaker]);
 
   useEffect(() => {
     // `deliver=1` flushes anything the scheduler queued into the conversation.

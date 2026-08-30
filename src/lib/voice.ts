@@ -123,6 +123,20 @@ export function useSpeaker(enabled: boolean) {
     setSpeaking(false);
   }, []);
 
+  /**
+   * Speaks immediately, bypassing the sentence buffer — for anything that
+   * has to happen synchronously inside a tap.
+   *
+   * iOS Safari only grants a page permission to use speechSynthesis if the
+   * *first* speak() call in the session happens inside the call stack of a
+   * genuine user gesture. push()/flush() run after a network round trip —
+   * too late for that first call — so turning voice on speaks a short line
+   * right there in the click handler. That both unlocks the API for every
+   * later reply and gives the user immediate proof it actually works,
+   * instead of a silent first reply and no way to tell why.
+   */
+  const speakNow = useCallback((text: string) => utter(text), [utter]);
+
   /** Feed streamed text; complete sentences are spoken as they arrive. */
   const push = useCallback(
     (delta: string) => {
@@ -150,7 +164,7 @@ export function useSpeaker(enabled: boolean) {
     if (!enabled) cancel();
   }, [enabled, cancel]);
 
-  return { push, flush, cancel, speaking };
+  return { push, flush, cancel, speakNow, speaking };
 }
 
 /* ------------------------------------------------------------------ */

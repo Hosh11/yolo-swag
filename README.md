@@ -111,8 +111,21 @@ transcription is wrong often enough that firing off a misheard sentence costs
 more than the keypress saves. If the platform has an `en-GB` voice, it gets
 used; a Midwestern American reading her lines undercuts the character.
 
-`SpeechRecognition` is Chrome/Safari only. Where it is missing the mic hides
-itself and typing is unaffected.
+Turning voice on speaks a short line immediately, inside the tap itself. That
+is not just a confirmation — iOS Safari only grants a page permission to use
+speechSynthesis if the *first* call in the session happens synchronously
+inside a genuine user gesture. push()/flush() run after the network reply
+comes back, which is too late; without this, the first reply after enabling
+voice would be silently mute on iOS with no error anywhere.
+
+`SpeechRecognition` (the mic / dictation half) has never shipped in iOS or
+iPadOS Safari — desktop Safari has it, the mobile build does not, and this
+has been true for years with no sign of changing. Where it's missing the mic
+button hides itself rather than pretending to work. **On an iPad this means
+our mic button will never appear.** The practical workaround costs no code:
+the iPad's own keyboard has a dictation key that types straight into any text
+field, this composer included — that's a different, OS-level feature, and it
+already works today.
 
 ### The scheduler
 
