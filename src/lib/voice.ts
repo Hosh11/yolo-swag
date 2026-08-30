@@ -54,21 +54,65 @@ export function speechSupported(): boolean {
 /* ------------------------------------------------------------------ */
 
 /**
- * Wren is written as British. If the platform has an en-GB voice, use it —
- * a Midwestern American reading her lines undercuts the whole character.
+ * Voices the platform reports as female, by name. There is no gender field on
+ * SpeechSynthesisVoice and no way to derive one, so a name list is the only
+ * option available — these are the standard Apple, Microsoft and Google voices.
+ */
+const FEMALE = [
+  "serena", "kate", "stephanie", "martha", "fiona", "moira", "tessa", "karen",
+  "samantha", "catherine", "nicky", "ava", "allison", "susan", "zoe", "sonia",
+  "libby", "hazel", "zira", "maisie", "olivia", "amelie", "female",
+];
+
+/**
+ * Explicitly excluded. Daniel is the one that matters: it is the *default*
+ * en-GB voice on Apple platforms, so anything that merely prefers British and
+ * falls back to the first match lands on a man. An earlier version of this
+ * file had Daniel in the preferred list outright, which is how Wren ended up
+ * speaking in a male voice on iPadOS.
+ */
+const MALE = [
+  "daniel", "arthur", "oliver", "george", "ryan", "thomas", "alex", "fred",
+  "aaron", "rishi", "gordon", "male", "reed", "rocko", "eddy", "grandpa",
+];
+
+const has = (haystack: string, needles: string[]) =>
+  needles.some((n) => haystack.includes(n));
+
+/** Higher is better. Only voices scoring above zero are ever auto-selected. */
+function score(voice: SpeechSynthesisVoice): number {
+  const name = voice.name.toLowerCase();
+  const lang = voice.lang.toLowerCase().replace("_", "-");
+
+  if (!lang.startsWith("en")) return -1;
+  // A man reading Wren's lines is worse than an American woman reading them.
+  if (has(name, MALE)) return -1;
+
+  let points = 1;
+  if (has(name, FEMALE)) points += 8;
+  if (lang.startsWith("en-gb")) points += 6;
+  // Apple and Microsoft ship low-quality "compact" voices by default and
+  // better ones on demand; the good ones announce themselves in the name.
+  if (has(name, ["enhanced", "premium", "neural", "natural", "siri"])) points += 4;
+  return points;
+}
+
+export function listVoices(): SpeechSynthesisVoice[] {
+  if (!speechSupported()) return [];
+  return window.speechSynthesis
+    .getVoices()
+    .filter((v) => v.lang.toLowerCase().startsWith("en"))
+    .sort((a, b) => score(b) - score(a) || a.name.localeCompare(b.name));
+}
+
+/**
+ * Best available voice for Wren: British and female where the device has one,
+ * never a voice known to be male, and preferring the higher-quality variants.
  */
 function pickVoice(): SpeechSynthesisVoice | null {
-  const voices = window.speechSynthesis.getVoices();
-  if (voices.length === 0) return null;
-
-  const british = voices.filter((v) => v.lang === "en-GB" || v.lang === "en_GB");
-  const preferred = ["Serena", "Kate", "Stephanie", "Sonia", "Libby", "Martha", "Daniel"];
-
-  for (const name of preferred) {
-    const match = british.find((v) => v.name.includes(name));
-    if (match) return match;
-  }
-  return british[0] ?? voices.find((v) => v.lang.startsWith("en")) ?? null;
+  const ranked = listVoices();
+  const best = ranked.find((v) => score(v) > 1);
+  return best ?? ranked[0] ?? null;
 }
 
 /** Speech synthesis chokes on markdown punctuation; strip what it can't read. */
@@ -89,19 +133,59 @@ const SENTENCE = /[^.!?…]+[.!?…]+["'")\]]*\s*/g;
  * boundaries are the natural unit — she starts talking about as fast as a
  * person would.
  */
+const VOICE_KEY = "wren:voiceURI";
+
 export function useSpeaker(enabled: boolean) {
   const buffer = useRef("");
   const voice = useRef<SpeechSynthesisVoice | null>(null);
   const [speaking, setSpeaking] = useState(false);
+  const [voices, setVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [voiceURI, setVoiceURIState] = useState<string | null>(null);
 
   useEffect(() => {
     if (!speechSupported()) return;
+
+    // getVoices() is empty until the platform has loaded them, and on iOS that
+    // happens after first paint — so this has to run again on voiceschanged.
     const load = () => {
-      voice.current = pickVoice();
+      const available = listVoices();
+      setVoices(available);
+
+      let saved: string | null = null;
+      try {
+        saved = window.localStorage.getItem(VOICE_KEY);
+      } catch {
+        // Storage blocked; fall through to the automatic pick.
+      }
+
+      const chosen =
+        (saved && available.find((v) => v.voiceURI === saved)) || pickVoice();
+      voice.current = chosen;
+      setVoiceURIState(chosen?.voiceURI ?? null);
     };
+
     load();
     window.speechSynthesis.addEventListener("voiceschanged", load);
     return () => window.speechSynthesis.removeEventListener("voiceschanged", load);
+  }, []);
+
+  /** Switch voice. Speaks a sample so the choice can be judged by ear. */
+  const setVoiceURI = useCallback((uri: string) => {
+    const chosen = listVoices().find((v) => v.voiceURI === uri);
+    if (!chosen) return;
+    voice.current = chosen;
+    setVoiceURIState(uri);
+    try {
+      window.localStorage.setItem(VOICE_KEY, uri);
+    } catch {
+      // Choice just won't persist between sessions.
+    }
+    window.speechSynthesis.cancel();
+    const sample = new SpeechSynthesisUtterance("Right then. This is me.");
+    sample.voice = chosen;
+    sample.lang = chosen.lang;
+    sample.rate = 1.02;
+    window.speechSynthesis.speak(sample);
   }, []);
 
   const utter = useCallback((text: string) => {
@@ -110,7 +194,10 @@ export function useSpeaker(enabled: boolean) {
     const utterance = new SpeechSynthesisUtterance(body);
     if (voice.current) utterance.voice = voice.current;
     utterance.lang = voice.current?.lang ?? "en-GB";
-    utterance.rate = 1.05;
+    // Slightly under the default. The stock voices race, and the flatness
+    // reads as less robotic when the phrasing has a little more room.
+    utterance.rate = 1.02;
+    utterance.pitch = 1.05;
     utterance.onstart = () => setSpeaking(true);
     utterance.onend = () => setSpeaking(false);
     window.speechSynthesis.speak(utterance);
@@ -164,7 +251,7 @@ export function useSpeaker(enabled: boolean) {
     if (!enabled) cancel();
   }, [enabled, cancel]);
 
-  return { push, flush, cancel, speakNow, speaking };
+  return { push, flush, cancel, speakNow, speaking, voices, voiceURI, setVoiceURI };
 }
 
 /* ------------------------------------------------------------------ */

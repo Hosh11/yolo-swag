@@ -111,6 +111,19 @@ transcription is wrong often enough that firing off a misheard sentence costs
 more than the keypress saves. If the platform has an `en-GB` voice, it gets
 used; a Midwestern American reading her lines undercuts the character.
 
+**Voice quality is the operating system's, not this app's.** The Web Speech
+API only plays voices the device already has, and the ones shipped by default
+are the low-quality "compact" ones — flat and robotic, and nothing in this
+code can change that. The fix is on the device: on iOS/iPadOS, Settings →
+Accessibility → Spoken Content → Voices → English, then download an Enhanced
+or Premium voice. The picker in the header lists whatever is installed and
+speaks a sample when you switch, so the choice can be made by ear.
+
+Voice selection avoids male voices by name, because there is no gender field
+on `SpeechSynthesisVoice` and no way to derive one. Daniel matters most: it is
+the *default* en-GB voice on Apple platforms, so any logic that prefers
+British and takes the first match hands Wren a man's voice.
+
 Turning voice on speaks a short line immediately, inside the tap itself. That
 is not just a confirmation — iOS Safari only grants a page permission to use
 speechSynthesis if the *first* call in the session happens synchronously

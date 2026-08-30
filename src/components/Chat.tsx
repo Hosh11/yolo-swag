@@ -248,6 +248,21 @@ export default function Chat() {
               {confirmClear ? "sure?" : "clear"}
             </button>
           )}
+          {canSpeak && voice && speaker.voices.length > 1 && (
+            <select
+              value={speaker.voiceURI ?? ""}
+              onChange={(e) => speaker.setVoiceURI(e.target.value)}
+              aria-label="Which voice Wren speaks in"
+              title="Pick a voice — it speaks a sample so you can judge by ear"
+              className="max-w-[9rem] rounded-lg border border-ink-line bg-ink-soft px-2 py-1 text-xs text-paper-dim outline-none focus:border-paper-faint"
+            >
+              {speaker.voices.map((v) => (
+                <option key={v.voiceURI} value={v.voiceURI}>
+                  {v.name}
+                </option>
+              ))}
+            </select>
+          )}
           {canSpeak && (
             <button
               type="button"
