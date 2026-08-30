@@ -61,16 +61,25 @@ export default function Chat() {
 
   useEffect(() => {
     // `deliver=1` flushes anything the scheduler queued into the conversation.
-    fetch("/api/state?deliver=1")
-      .then((r) => r.json())
-      .then((data) => {
+    (async () => {
+      try {
+        const response = await fetch("/api/state?deliver=1");
+        if (!response.ok) {
+          setError(await serverError(response));
+          return;
+        }
+        const data = await response.json();
         setName(data.name);
         setStreak(data.streak);
         setTurns(
           data.messages.map((m: Turn) => ({ id: m.id, role: m.role, text: m.text })),
         );
-      })
-      .catch(() => setError("Couldn't reach the server."));
+      } catch {
+        // Only a genuine transport failure reaches here now — a served error
+        // carries its own message and is reported above.
+        setError("Couldn't reach the server. Check your connection.");
+      }
+    })();
   }, []);
 
   useEffect(() => {
@@ -101,9 +110,8 @@ export default function Chat() {
           body: JSON.stringify({ message: text }),
         });
 
-        if (!response.ok || !response.body) {
-          throw new Error(`Request failed (${response.status}).`);
-        }
+        if (!response.ok) throw new Error(await serverError(response));
+        if (!response.body) throw new Error("The server sent an empty response.");
 
         const reader = response.body.getReader();
         const decoder = new TextDecoder();
@@ -259,6 +267,23 @@ export default function Chat() {
       <Composer onSend={send} disabled={busy} voiceEnabled={voice} />
     </div>
   );
+}
+
+/**
+ * Pull the server's own explanation out of a failed response.
+ *
+ * Collapsing every failure into one generic line hides exactly the message
+ * that says what to fix — which is the whole point of the errors the API
+ * routes raise.
+ */
+async function serverError(response: Response): Promise<string> {
+  try {
+    const body = await response.json();
+    if (typeof body?.error === "string" && body.error.trim()) return body.error;
+  } catch {
+    // Not JSON — an edge-level failure, say. Fall back to the status.
+  }
+  return `The server returned ${response.status} ${response.statusText}.`.trim();
 }
 
 /** Wren's own words, split on blank lines so paragraphs breathe. */

@@ -21,6 +21,20 @@ export const dynamic = "force-dynamic";
  * so a background refresh can't silently consume a nudge the user never saw.
  */
 export async function GET(request: Request) {
+  try {
+    return await readState(request);
+  } catch (error) {
+    // Surface the reason. The database guards in lib/db/client.ts produce
+    // messages written to be read by whoever is deploying this; letting them
+    // become an anonymous 500 wastes them on a server log nobody opens.
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Failed to load state." },
+      { status: 500 },
+    );
+  }
+}
+
+async function readState(request: Request) {
   if (new URL(request.url).searchParams.get("deliver") === "1") {
     const waiting = await pendingCheckins();
     for (const checkin of waiting) {
@@ -73,6 +87,13 @@ export async function GET(request: Request) {
 
 /** Wipe the conversation. Projects, tasks, and captures are untouched. */
 export async function DELETE() {
-  await clearHistory();
-  return Response.json({ ok: true });
+  try {
+    await clearHistory();
+    return Response.json({ ok: true });
+  } catch (error) {
+    return Response.json(
+      { error: error instanceof Error ? error.message : "Failed to clear history." },
+      { status: 500 },
+    );
+  }
 }
