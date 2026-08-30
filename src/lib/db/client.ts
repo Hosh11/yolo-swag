@@ -1,5 +1,6 @@
 import { Kysely, type Dialect, type SqliteDatabase } from "kysely";
 import type { Database } from "./schema";
+import { env, timeZone } from "@/lib/env";
 
 let dbPromise: Promise<Kysely<Database>> | null = null;
 
@@ -32,7 +33,7 @@ function databaseUrl(): string {
   // alone, the empty string falls through to the Postgres branch and `pg`
   // quietly dials 127.0.0.1:5432, which is a nonsense default in production.
   for (const name of URL_VARS) {
-    const configured = process.env[name]?.trim();
+    const configured = env(name);
     if (configured) return configured;
   }
 
@@ -166,9 +167,9 @@ export function getDb(): Promise<Kysely<Database>> {
 export const nowIso = (): string => new Date().toISOString();
 
 /** YYYY-MM-DD in the given IANA zone. Streaks are a human-day concept. */
-export function today(timeZone = process.env.WREN_TIMEZONE ?? "UTC"): string {
+export function today(zone = timeZone("WREN_TIMEZONE")): string {
   return new Intl.DateTimeFormat("en-CA", {
-    timeZone,
+    timeZone: zone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",

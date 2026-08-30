@@ -1,4 +1,5 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { env } from "@/lib/env";
 
 let client: Anthropic | null = null;
 
@@ -12,7 +13,7 @@ export function anthropic(): Anthropic {
  * configured with `{type: "adaptive"}` — `budget_tokens` is deprecated there —
  * and depth is steered with `output_config.effort` instead.
  */
-export const MODEL = process.env.WREN_MODEL ?? "claude-sonnet-4-6";
+export const MODEL = env("WREN_MODEL") ?? "claude-sonnet-4-6";
 
 export type Effort = "low" | "medium" | "high" | "max";
 
@@ -23,7 +24,7 @@ function effort(raw: string | undefined, fallback: Effort): Effort {
 }
 
 /** Wren is conversational; she doesn't need to deliberate to say "logged". */
-export const WREN_EFFORT = effort(process.env.WREN_EFFORT, "medium");
+export const WREN_EFFORT = effort(env("WREN_EFFORT"), "medium");
 
 /** The writing sub-skill drafts and critiques prose, so it gets more room. */
-export const WRITING_EFFORT = effort(process.env.WREN_WRITING_EFFORT, "high");
+export const WRITING_EFFORT = effort(env("WREN_WRITING_EFFORT"), "high");

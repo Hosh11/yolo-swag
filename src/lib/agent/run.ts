@@ -4,6 +4,7 @@ import { WREN_SYSTEM } from "./wren";
 import { wrenTools } from "./registry";
 import { buildSnapshot } from "./state";
 import type { StreamEvent } from "./types";
+import { env } from "@/lib/env";
 import {
   appendHistory,
   getSetting,
@@ -17,7 +18,7 @@ const HISTORY_TURNS = 40;
 export async function userName(): Promise<string> {
   return (
     (await getSetting("user_name")) ??
-    process.env.WREN_USER_NAME ??
+    env("WREN_USER_NAME") ??
     "you"
   );
 }
