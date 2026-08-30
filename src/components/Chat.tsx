@@ -33,6 +33,7 @@ export default function Chat() {
   // so testing it during render renders a different tree than the client and
   // React throws a hydration mismatch.
   const [canSpeak, setCanSpeak] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(false);
 
   const bottom = useRef<HTMLDivElement>(null);
   const speaker = useSpeaker(voice);
@@ -190,6 +191,33 @@ export default function Chat() {
     [speaker],
   );
 
+  /**
+   * Two taps rather than a modal. Wiping the conversation is destructive and
+   * the control sits next to one you press often, so a stray tap must not do
+   * it — but a personal app doesn't need a dialog for it either. The armed
+   * state disarms itself, so walking away can't leave a live trigger.
+   */
+  const clearConversation = useCallback(async () => {
+    if (!confirmClear) {
+      setConfirmClear(true);
+      window.setTimeout(() => setConfirmClear(false), 4000);
+      return;
+    }
+    setConfirmClear(false);
+    speaker.cancel();
+    try {
+      const response = await fetch("/api/state", { method: "DELETE" });
+      if (!response.ok) {
+        setError(await serverError(response));
+        return;
+      }
+      setTurns([]);
+      setError(null);
+    } catch {
+      setError("Couldn't reach the server. Check your connection.");
+    }
+  }, [confirmClear, speaker]);
+
   const empty = turns.length === 0 && !busy;
 
   return (
@@ -205,6 +233,20 @@ export default function Chat() {
               <span className="mx-2 text-ink-line">/</span>
               {streak.wordsLast7.toLocaleString()} this week
             </p>
+          )}
+          {turns.length > 0 && (
+            <button
+              type="button"
+              onClick={clearConversation}
+              title="Clear the conversation. Projects, tasks and captures are kept."
+              className={`rounded-lg border px-2 py-1 text-xs tracking-wide transition ${
+                confirmClear
+                  ? "border-red-900/60 text-red-400"
+                  : "border-transparent text-paper-faint hover:text-paper-dim"
+              }`}
+            >
+              {confirmClear ? "sure?" : "clear"}
+            </button>
           )}
           {canSpeak && (
             <button
@@ -227,7 +269,7 @@ export default function Chat() {
       <div className="flex-1 space-y-7 overflow-y-auto py-8">
         {empty && (
           <p className="prose-wren mt-16 text-center text-paper-faint">
-            {name ? `Morning, ${name}.` : "Ready when you are."}
+            {name ? `${greeting()}, ${name}.` : "Ready when you are."}
           </p>
         )}
 
@@ -268,6 +310,16 @@ export default function Chat() {
       <Composer onSend={send} disabled={busy} voiceEnabled={voice} />
     </div>
   );
+}
+
+/** Time-of-day greeting. "Morning" at 10pm reads like a broken template. */
+function greeting(): string {
+  const hour = new Date().getHours();
+  if (hour < 5) return "Still up";
+  if (hour < 12) return "Morning";
+  if (hour < 18) return "Afternoon";
+  if (hour < 22) return "Evening";
+  return "Still up";
 }
 
 /**
