@@ -1,6 +1,6 @@
 # Wren: Build Plan
 
-> Companion to [ANALYSIS.md](./ANALYSIS.md). Target: a chief agent that orchestrates five lane agents (job, writing, household, learning, scheduling), acting on her own with human-in-the-loop approvals.
+> Companion to [ANALYSIS.md](./ANALYSIS.md) and [DESIGN.md](./DESIGN.md). Target: a chief agent that orchestrates five lane agents (job, writing, household, learning, scheduling), acting on her own with human-in-the-loop approvals.
 
 ## 1. Gap analysis
 
@@ -15,6 +15,7 @@
 | "Finding things" | Snapshot plus `project_recall` | One search across Notion, Calendar and history | Finder capability |
 | Memory | Last 40 rows | Durable facts and preferences, plus conversation summaries | Memory table and tools |
 | Safety | No auth, no tests, lint broken | Authed, tested, CI-gated | Foundation milestone |
+| Presence | A text chat with a robotic OS voice, and no mic on iOS | A Jarvis-style conversational partner with a premium voice, hands-free mode and a distinctive warm UI | M2 Presence ([DESIGN.md](./DESIGN.md)) |
 
 ## 2. Key decisions (my recommendations)
 
@@ -27,6 +28,28 @@
 | **Scheduler cadence** | Keep the Vercel daily cron, **plus** a GitHub Actions scheduled workflow (free) that calls a new `/api/cron/tick` every 15–30 min with `CRON_SECRET` | Hobby allows 1 cron/day. Reminders and approval expiry need more. Upgrading to Pro is the alternative ($). |
 | **Notifications** | **Web Push** (installable PWA) for approvals and the morning brief, plus an in-app Activity/Approvals tray. Email digest later, optionally. | Free, works on iOS 16.4+ for home-screen apps, no extra account. Flagged as an open question below. |
 | **Model** | Keep `WREN_MODEL` configurable. Lanes get their own effort env (`WREN_<LANE>_EFFORT`), following the `client.ts` pattern. | Already the convention |
+| **Hosting** | **Cloud brain, local workshop.** Vercel stays production (always on). Your PC is the dev machine (SQLite, `npm run dev`). Details in §2a. | Proactive autonomy only works if Wren is awake when you aren't looking |
+| **Voice** | A premium TTS provider (ElevenLabs or OpenAI) plus server-side STT, behind authed routes. Web Speech stays as the fallback. See [DESIGN.md §3](./DESIGN.md#3-voice). | Device voices are robotic, and iOS has no browser speech recognition |
+
+### 2a. Hosting: Vercel vs your PC
+
+| | ☁️ **Vercel (recommended for production)** | 🖥️ **Local on your PC** |
+|---|---|---|
+| Always on | ✅ Yes | ❌ Only while the PC is awake. A sleeping PC means a sleeping Wren. |
+| Reach from phone or iPad | ✅ Any network, HTTPS by default | ⚠️ Needs Tailscale (private network plus HTTPS via `tailscale serve`) |
+| Proactive check-ins and push | ✅ Cron, plus GitHub Actions tick (M6) | ✅ Any frequency (`node-cron`/Task Scheduler), but only while it's on |
+| Hobby limits (1 cron/day, ~300s functions) | ⚠️ Workarounds needed | ✅ None |
+| Cost | Free (Hobby) plus Postgres free tier | Free plus electricity |
+| Privacy | Data in Vercel and the Postgres provider | Data never leaves the house (except LLM and voice API calls) |
+| Local superpowers | ❌ | ✅ Search files on the PC, local Whisper/TTS if the GPU allows |
+| Auth required | ✅ Yes, it's public (M1) | Strongly recommended. Tailscale-only access lowers the risk. |
+
+**Recommendation: hybrid, in this order.**
+1. **Now:** develop on the PC. Clone the repo, use SQLite, run `npm run dev` and iterate fast. Production stays on Vercel. The code already switches databases by `DATABASE_URL` (`db/client.ts:30-48`), so there's nothing to build.
+2. **M1:** auth goes in regardless. It protects Vercel, and it's cheap insurance if you ever expose the PC.
+3. **Later (optional, after M5):** a **local companion**. A small authenticated worker on the PC that the cloud Wren can call for "find that file on my computer". The cloud keeps the brain and the PC lends its hands.
+
+**When to switch to local-only:** if your PC is genuinely on 24/7, you'll only use Wren at home or over Tailscale, and the Hobby limits start to hurt. The move is to set `DATABASE_URL` to a local Postgres or SQLite, run `npm run build && npm start` as a service, swap the Vercel cron for a local scheduler, and use `tailscale serve` for HTTPS. That's about a day's work, and none of the roadmap changes.
 
 ## 3. Autonomy model
 
@@ -53,14 +76,14 @@ Why Scheduling first:
 3. **It's safe to automate.** Wren's own tagged blocks on your own calendar are T1 and reversible, so autonomy can start there before anything touches other people.
 4. **The API is well defined** (Google Calendar), so there's less ambiguity than with household or learning.
 
-"Finding things" is your other drain. It isn't a lane. It's a capability every lane needs, so build it as **chief-level `find` tools** over Notion, Calendar and conversation history (M4), not as a sixth agent.
+"Finding things" is your other drain. It isn't a lane. It's a capability every lane needs, so build it as **chief-level `find` tools** over Notion, Calendar and conversation history (M5), not as a sixth agent.
 
 ## 5. Roadmap
 
 ```
-M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Scheduling lane ─► M4 Notion + Finder
-                                                                                              │
-              M7 Household + Learning ◄─ M6 Job lane ◄─ M5 Notifications, tick & memory ◄─────┘
+M1 Foundation ─► M2 Presence ─► M3 Lane framework + Autonomy kernel ─► M4 Calendar + Scheduling lane
+                                                                                   │
+   M8 Household + Learning ◄─ M7 Job lane ◄─ M6 Push, tick & memory ◄─ M5 Notion + Finder ◄┘
 ```
 
 ### M1: Foundation and safety · Size **M** · Depends on nothing
@@ -80,7 +103,32 @@ M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Sc
 
 **Acceptance:** an unauthenticated `POST /api/chat` and `DELETE /api/state` return 401. The login flow works. `npm run lint`, `npm test`, `npm run typecheck` and `npm run build` all pass locally and in CI. `npm audit --omit=dev` shows no critical or high issues in `next`. An existing DB migrates via the baseline without data loss.
 
-### M2: Lane framework and autonomy kernel · Size **M** · Depends on M1
+### M2: Presence (Jarvis feel, voice, Lamplight UI) · Size **M–L** · Depends on M1
+**Goal:** Wren feels present and conversational, sounds like a person, and looks like nothing else. Full spec in [DESIGN.md](./DESIGN.md), visual mock in [wren-ui-concept.html](./wren-ui-concept.html).
+
+Why second: it's what you touch every day, it needs no integrations, and a Wren you *want* to talk to is the one you'll keep using. That matters more than any feature for staying with the tool. Auth comes first because the voice routes spend paid API credit.
+
+| Task | Files |
+|---|---|
+| Persona: the "Conversation, not transactions", "Acting out loud" and "Speaking aloud" sections, and adjusted length guidance | `src/lib/agent/wren.ts` (still one frozen string) |
+| `mode: voice\|text` from the client, appended to the user turn as `<mode>voice</mode>` | `Chat.tsx`, `api/chat/route.ts`, `run.ts:93-102` |
+| Time-of-day line in the snapshot, and an app-open greeting turn (≤1 per 4h) | `state.ts`, `run.ts`, `Chat.tsx` |
+| Premium TTS behind `/api/voice/tts` (streams audio), with a provider interface (ElevenLabs / OpenAI) and Web Speech fallback | `src/app/api/voice/tts/route.ts`, `src/lib/voice/tts-*.ts`, `src/lib/voice.ts` |
+| Server STT: `MediaRecorder` → `/api/voice/stt` (fixes iOS) | `src/app/api/voice/stt/route.ts`, `Composer.tsx` |
+| Conversation mode: hands-free loop, voice-activity detection, barge-in, full-screen Ember with captions | `src/components/ConversationMode.tsx`, `src/components/Ember.tsx` |
+| Lamplight redesign: tokens, Fraunces and Inter via `next/font`, letters-not-bubbles, margin-note tool trace, Today rail (placeholder data until M4), theme follows the sun | `globals.css`, `layout.tsx`, `Chat.tsx`, `ToolTrace.tsx`, `src/components/TodayRail.tsx` |
+| Form-of-address setting | `settings` table via `repo.ts`, `run.ts:18-24` |
+
+**Acceptance:**
+- In voice mode on an iPad you can hold a 5-turn hands-free conversation: she speaks in the chosen premium voice, auto-listens, and stops when you talk over her.
+- Replies in voice mode contain no markdown.
+- Opening the app in the morning gets a one-line, state-aware greeting, and not again within 4h.
+- Both themes pass WCAG AA contrast.
+- `prefers-reduced-motion` stops the Ember animating.
+- Voice API keys never reach the client.
+- All M1 checks stay green.
+
+### M3: Lane framework and autonomy kernel · Size **M** · Depends on M1
 **Goal:** adding a lane becomes a folder, and every write goes through policy.
 
 | Task | Files |
@@ -97,7 +145,7 @@ M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Sc
 
 **Acceptance:** the writing lane behaves the same, now on `runSubAgent`. A test tool marked T2 creates a pending approval instead of executing. Approve runs it, and Deny records it without running. T1 actions show in the Activity tray with a working Undo. Every write has an `actions` row. There's a unit test for each tier path.
 
-### M3: Google Calendar and the Scheduling lane · Size **L** · Depends on M2
+### M4: Google Calendar and the Scheduling lane · Size **L** · Depends on M3
 **Goal:** Wren can see your time and protect it.
 
 | Task | Files |
@@ -111,7 +159,7 @@ M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Sc
 
 **Acceptance:** "Find me 90 minutes for chapter 9 this week" yields a block on your calendar (T1, undoable). "Move my dentist appointment" yields an approval card. The agenda shows in state. Tokens are never logged or returned to the client. Calendar calls are mocked in tests.
 
-### M4: Notion Home Base and Finder · Size **L** · Depends on M2 (and M3 for the calendar half of Finder)
+### M5: Notion Home Base and Finder · Size **L** · Depends on M3 (and M4 for the calendar half of Finder)
 **Goal:** Wren works in your real system, and can find anything.
 
 | Task | Files |
@@ -125,7 +173,7 @@ M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Sc
 
 **Acceptance:** a task added in chat appears in Notion Tasks within seconds. "Where's that note about the lighthouse letters?" returns the Notion page link. The snapshot loads in under 1.5s with the cache warm. The import script is idempotent.
 
-### M5: Notifications, frequent tick and memory · Size **M** · Depends on M2
+### M6: Notifications, frequent tick and memory · Size **M** · Depends on M3
 - PWA manifest, service worker, Web Push (VAPID keys), and a `push_subscriptions` table.
 - A `/api/cron/tick` endpoint for approval expiry, reminders and push. A GitHub Actions `schedule:` workflow calls it.
 - The morning brief: agenda, pending approvals, yesterday's T1 actions, one nudge.
@@ -133,11 +181,11 @@ M1 Foundation ─► M2 Lane framework + Autonomy kernel ─► M3 Calendar + Sc
 
 **Acceptance:** an approval reaches your phone within a tick interval. Quiet hours are respected. "Remember I don't take meetings before 10" persists and changes `find_free_time`.
 
-### M6: Job lane · Size **M** · Depends on M4
+### M7: Job lane · Size **M** · Depends on M5
 Job Pipeline in Notion: status tracking, follow-up reminders (T1), drafting cover letters and replies (T0 draft), and any sending or submitting (T2).
 
-### M7: Household and Learning lanes · Size **M** each · Depends on M2 and M3
-Household: recurring chores and appointments via calendar. Learning: study plans and spaced review blocks. Both are mostly configuration once M2 exists.
+### M8: Household and Learning lanes · Size **M** each · Depends on M3 and M4
+Household: recurring chores and appointments via calendar. Learning: study plans and spaced review blocks. Both are mostly configuration once M3 exists.
 
 ## 6. Open questions
 
@@ -151,3 +199,5 @@ Household: recurring chores and appointments via calendar. Learning: study plans
 | Q6 | Is the approval expiry window of 48h right? | 48h |
 | Q7 | Which Google calendar(s) can Wren write to? | Primary only, Wren-tagged events only for T1 |
 | Q8 | Does Wren keep her own copy of Writing Sessions for streak maths, or read Notion? | Read Notion, cache in Postgres |
+| Q9 | Is your PC on 24/7? Windows native or WSL? | Not 24/7, so hybrid: Vercel for production, PC for development (§2a) |
+| Q10 | Is paying for a voice provider OK? (see DESIGN.md D1–D5 for the design questions) | Yes, if the voice sounds right. Compare by ear. |

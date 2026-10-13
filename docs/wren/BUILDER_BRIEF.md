@@ -1,6 +1,6 @@
 # Builder Brief: Wren · Milestone M1 (Foundation and Safety)
 
-> A self-contained handoff. Read this file top to bottom, then `ANALYSIS.md` §2–§6 if you want more depth. Build **only M1**. Everything after it is in `PLAN.md`; don't start it.
+> A self-contained handoff. Read this file top to bottom, then `ANALYSIS.md` §2–§6 if you want more depth. Build **only M1**. Everything after it is in `PLAN.md` (and `DESIGN.md` for M2 Presence); don't start it.
 
 ---
 
@@ -90,7 +90,7 @@ Design (decided, don't re-litigate):
   - Read env through `env()` from `src/lib/env.ts`.
 - `src/app/api/auth/login/route.ts`: POST `{passphrase}`. On success, set cookie `wren_session` (`httpOnly`, `secure` in production, `sameSite=lax`, `path=/`, 30d). On failure, return 401 `{error}` after a ~500ms delay.
 - `src/app/api/auth/logout/route.ts`: POST clears the cookie.
-- `src/app/login/page.tsx`: a minimal form in the existing ink/paper/ember styling (`globals.css`). Copy in Wren's voice, for example "Who goes there?" On success it does `location.href = "/"`.
+- `src/app/login/page.tsx`: a minimal form in the existing ink/paper/ember styling (`globals.css`). Copy in Wren's voice, for example "Who goes there?" On success it does `location.href = "/"`. Keep it simple: M2 restyles everything to the "Lamplight" design in DESIGN.md, so use existing tokens only and don't invent new ones.
 - **`src/proxy.ts`** (Next 16 renamed `middleware` to `proxy`; see `node_modules/next/dist/docs/01-app/03-api-reference/03-file-conventions/proxy.md`). Export `function proxy(request)`.
   - Allow: `/login`, `/api/auth/*`, `/api/cron/*` (the cron route keeps its own Bearer check), and static assets (use a negative matcher for `_next/static`, `_next/image`, `favicon.ico`).
   - Otherwise, if there's no valid cookie: API paths get a `401` JSON `{error: "Not signed in."}`, and pages redirect to `/login`.
@@ -159,11 +159,25 @@ Design (decided, don't re-litigate):
 | Run `tsc`, lint, tests and build before every commit | Push with any of them red |
 | Use constant-time comparisons for secrets | Log, return, or commit any secret value |
 | Keep `better-sqlite3` loaded via `createRequire` with a non-literal specifier | "Simplify" it to `import("better-sqlite3")`, which breaks the prod build (`db/client.ts:86-111`) |
-| Keep changes scoped to M1 | Start Notion, Calendar, approvals or new lanes |
+| Keep changes scoped to M1 | Start Notion, Calendar, approvals, new lanes, **or the M2 redesign/persona changes** (see DESIGN.md) |
 | Surface open questions in your final report | Guess on anything in §7 |
 | Commit to branch `claude/gracious-knuth-m7cvww` (or the branch you're assigned) | Push to `main` or open a PR unless asked |
 
 ## 6. Commands
+
+### Where things run
+**Production = Vercel (always on). Development = the user's PC.** See PLAN.md §2a. Build M1 so the app works in both places: nothing Vercel-only in the auth code, and SQLite stays fully supported for local development.
+
+### First-time setup on the user's PC
+- Install **Node 22 LTS** and **Git**. On Windows, either native (PowerShell) or WSL2 (Ubuntu) works.
+  - **Native Windows:** `better-sqlite3` normally installs a prebuilt binary for Node 22 x64. If it tries to compile, install the "Desktop development with C++" workload from the Visual Studio Build Tools, or use WSL2.
+  - `npm run cron:checkin` uses `curl`, which ships with Windows 10 and later.
+- Then:
+  - `git clone https://github.com/Hosh11/yolo-swag.git`
+  - `cd yolo-swag`
+  - `git checkout <your branch>`
+  - continue below.
+
 
 ```bash
 npm ci
