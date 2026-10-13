@@ -40,6 +40,7 @@ export default function Chat() {
 
   // Restore the voice preference before the first reply can arrive.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- must read browser-only state after mount to avoid a hydration mismatch (see canSpeak above)
     setCanSpeak(speechSupported());
     try {
       setVoice(window.localStorage.getItem("wren:voice") === "on");
