@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Wren Overview</title>
+<meta name="description" content="Wren at a glance: architecture, feature status board, roadmap and autonomy model.">
+<style>
+  :root {
+    --bg: #f6f2ea; --surface: #fffdf8; --ink: #1d1a16; --muted: #6b6359; --line: #e2dacd;
+    --accent: #b9772a; --accent-soft: #f3e3cc;
+    --ok: #2f8a4f; --ok-bg: #e2f2e7;
+    --part: #b7861b; --part-bg: #f8edcf;
+    --stub: #6c6fb8; --stub-bg: #e6e7f6;
+    --miss: #c0453a; --miss-bg: #f8e1de;
+    --plan: #8a8378;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0d0c0b; --surface: #161513; --ink: #ece7de; --muted: #9b938a; --line: #2b2723;
+      --accent: #d8a25c; --accent-soft: #2e2416;
+      --ok: #5fc07f; --ok-bg: #15281b; --part: #e0b44a; --part-bg: #2d2511;
+      --stub: #9ea1e6; --stub-bg: #1d1e33; --miss: #ef7a6e;
+      --miss-bg: #341816; --plan: #8f877c;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0d0c0b; --surface: #161513; --ink: #ece7de; --muted: #9b938a; --line: #2b2723;
+    --accent: #d8a25c; --accent-soft: #2e2416;
+    --ok: #5fc07f; --ok-bg: #15281b; --part: #e0b44a; --part-bg: #2d2511;
+    --stub: #9ea1e6; --stub-bg: #1d1e33; --miss: #ef7a6e; --miss-bg: #341816; --plan: #8f877c;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink); font-family: var(--sans); line-height: 1.5; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 16px 64px; }
+  h1, h2 { font-family: var(--serif); font-weight: 600; letter-spacing: .01em; }
+  h1 { font-size: clamp(2rem, 5vw, 2.8rem); margin: 0; }
+  h2 { font-size: 1.45rem; margin: 48px 0 6px; display: flex; gap: 10px; align-items: center; }
+  .sub { color: var(--muted); margin: 4px 0 0; }
+  .lede { color: var(--muted); margin: 0 0 18px; font-size: .95rem; }
+  .card { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+  .hero { display: flex; justify-content: space-between; align-items: end; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--line); padding-bottom: 20px; }
+  .quote { font-family: var(--serif); font-style: italic; color: var(--accent); }
+  /* KPI */
+  .kpis { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 24px; }
+  .kpi { border-radius: 14px; padding: 14px 16px; border: 1px solid var(--line); background: var(--surface); }
+  .kpi b { font-size: 2rem; font-family: var(--serif); display: block; line-height: 1.1; }
+  .kpi span { font-size: .82rem; color: var(--muted); }
+  .kpi.ok b { color: var(--ok); } .kpi.part b { color: var(--part); } .kpi.stub b { color: var(--stub); } .kpi.miss b { color: var(--miss); }
+  .checks { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
+  .chip { font-size: .8rem; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); }
+  .chip.ok { color: var(--ok); background: var(--ok-bg); border-color: transparent; }
+  .chip.miss { color: var(--miss); background: var(--miss-bg); border-color: transparent; }
+  /* Findings */
+  .findings { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+  .finding .ic { font-size: 1.6rem; }
+  .finding h3 { margin: 6px 0 4px; font-size: 1rem; }
+  .finding p { margin: 0; color: var(--muted); font-size: .9rem; }
+  /* Diagram */
+  .diagram svg { width: 100%; height: auto; display: block; }
+  .n rect { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+  .n.built rect { stroke: var(--ok); }
+  .n.chief rect { fill: var(--accent-soft); stroke: var(--accent); stroke-width: 2; }
+  .n.plan rect { stroke: var(--plan); stroke-dasharray: 6 5; fill: transparent; }
+  .n.risk rect { stroke: var(--miss); stroke-dasharray: 6 5; fill: var(--miss-bg); }
+  .n text { fill: var(--ink); font: 600 14px var(--sans); }
+  .n text.s { fill: var(--muted); font: 400 11.5px var(--sans); }
+  .n.plan text { fill: var(--muted); }
+  .e { stroke: var(--muted); stroke-width: 1.5; fill: none; }
+  .e.plan { stroke: var(--plan); stroke-dasharray: 5 5; }
+  .zone { fill: none; stroke: var(--line); stroke-width: 1; }
+  .zl { fill: var(--muted); font: 600 11px var(--sans); letter-spacing: .12em; text-transform: uppercase; }
+  .legend { display: flex; gap: 18px; flex-wrap: wrap; font-size: .82rem; color: var(--muted); margin-top: 10px; }
+  .sw { display: inline-block; width: 22px; height: 12px; border-radius: 3px; vertical-align: -1px; margin-right: 6px; border: 2px solid; }
+  /* Status board */
+  .board { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .col h3 { margin: 0 0 10px; font-size: .85rem; letter-spacing: .08em; text-transform: uppercase; display: flex; justify-content: space-between; }
+  .col.ok h3 { color: var(--ok); } .col.part h3 { color: var(--part); } .col.stub h3 { color: var(--stub); } .col.miss h3 { color: var(--miss); }
+  .tile { border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; font-size: .86rem; border-left: 4px solid; }
+  .col.ok .tile { background: var(--ok-bg); border-color: var(--ok); }
+  .col.part .tile { background: var(--part-bg); border-color: var(--part); }
+  .col.stub .tile { background: var(--stub-bg); border-color: var(--stub); }
+  .col.miss .tile { background: var(--miss-bg); border-color: var(--miss); }
+  .tile small { display: block; color: var(--muted); font-size: .74rem; font-family: ui-monospace, Menlo, monospace; word-break: break-all; }
+  /* Timeline */
+  .timeline { position: relative; display: grid; grid-template-columns: repeat(7, 1fr); gap: 10px; padding-top: 34px; }
+  .timeline::before { content: ""; position: absolute; top: 14px; left: 4%; right: 4%; height: 3px; background: linear-gradient(90deg, var(--accent), var(--line)); border-radius: 3px; }
+  .ms { position: relative; }
+  .ms .dot { position: absolute; top: -27px; left: 50%; transform: translateX(-50%); width: 18px; height: 18px; border-radius: 50%; background: var(--surface); border: 3px solid var(--plan); }
+  .ms.cur .dot { border-color: var(--accent); background: var(--accent); box-shadow: 0 0 0 6px var(--accent-soft); }
+  .ms .card { padding: 12px; height: 100%; }
+  .ms.cur .card { border-color: var(--accent); border-width: 2px; }
+  .ms .tag { font: 700 .75rem var(--sans); color: var(--accent); letter-spacing: .06em; }
+  .ms h4 { margin: 2px 0 6px; font-size: .92rem; font-family: var(--serif); }
+  .ms p { margin: 0; font-size: .78rem; color: var(--muted); }
+  .size { display: inline-block; font-size: .7rem; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--accent-soft); color: var(--accent); margin-top: 8px; }
+  /* Tiers */
+  .tiers { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .tier { border-top: 5px solid; }
+  .tier.t0 { border-color: var(--ok); } .tier.t1 { border-color: var(--part); } .tier.t2 { border-color: var(--stub); } .tier.t3 { border-color: var(--miss); }
+  .tier h3 { margin: 0; font-size: 1rem; } .tier .ic { font-size: 1.4rem; }
+  .tier p { margin: 6px 0 0; font-size: .84rem; color: var(--muted); }
+  .tier .how { color: var(--ink); font-size: .8rem; margin-top: 8px; border-top: 1px dashed var(--line); padding-top: 8px; }
+  /* Lane pick */
+  .pick { display: grid; grid-template-columns: 1.1fr 1fr; gap: 16px; align-items: start; }
+  .lanes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; text-align: center; }
+  .lane { padding: 12px 6px; border-radius: 12px; border: 1px dashed var(--plan); font-size: .82rem; color: var(--muted); }
+  .lane .ic { font-size: 1.5rem; display: block; }
+  .lane.built { border: 2px solid var(--ok); color: var(--ink); }
+  .lane.first { border: 2px solid var(--accent); background: var(--accent-soft); color: var(--ink); font-weight: 600; }
+  ul.why { margin: 0; padding-left: 20px; font-size: .9rem; } ul.why li { margin-bottom: 6px; }
+  .next { margin-top: 48px; background: var(--accent-soft); border: 2px solid var(--accent); border-radius: 16px; padding: 20px; }
+  .next h2 { margin: 0 0 8px; }
+  .next ol { margin: 8px 0 0; padding-left: 20px; font-size: .92rem; }
+  code { font-family: ui-monospace, Menlo, monospace; font-size: .85em; background: var(--line); padding: 1px 5px; border-radius: 4px; }
+  footer { margin-top: 40px; color: var(--muted); font-size: .8rem; text-align: center; }
+  @media (max-width: 860px) {
+    .board, .tiers { grid-template-columns: repeat(2, 1fr); }
+    .findings, .pick { grid-template-columns: 1fr; }
+    .timeline { grid-template-columns: 1fr; padding-top: 0; padding-left: 28px; }
+    .timeline::before { top: 0; bottom: 0; left: 8px; right: auto; width: 3px; height: auto; background: linear-gradient(180deg, var(--accent), var(--line)); }
+    .ms .dot { top: 14px; left: -29px; transform: none; }
+  }
+  @media (max-width: 520px) {
+    .kpis { grid-template-columns: repeat(2, 1fr); }
+    .board, .tiers { grid-template-columns: 1fr; }
+    .lanes { grid-template-columns: repeat(3, 1fr); }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="hero">
+    <div>
+      <h1>🐦 Wren</h1>
+      <p class="sub">Chief agent · at a glance · commit <code>438211b</code> · 13 Oct 2026</p>
+    </div>
+    <p class="quote">“Solid bones. Now lock the door, then give her the keys.”</p>
+  </header>
+
+  <div class="kpis" aria-label="Feature counts">
+    <div class="kpi ok"><b>13</b><span>🟢 Working</span></div>
+    <div class="kpi part"><b>3</b><span>🟡 Partial</span></div>
+    <div class="kpi stub"><b>1</b><span>🟣 Stubbed</span></div>
+    <div class="kpi miss"><b>11</b><span>🔴 Missing / broken</span></div>
+  </div>
+  <div class="checks">
+    <span class="chip ok">✓ typecheck</span>
+    <span class="chip ok">✓ build</span>
+    <span class="chip miss">✗ lint (next lint removed)</span>
+    <span class="chip miss">✗ tests (none)</span>
+    <span class="chip miss">✗ auth (none)</span>
+    <span class="chip miss">⚠ next 16.3.3 advisories</span>
+  </div>
+
+  <h2>⚡ Three biggest findings</h2>
+  <div class="findings">
+    <div class="card finding"><div class="ic">🔓</div><h3>Wide open</h3><p><code>/api/chat</code> and <code>/api/state</code> have no auth. An anonymous <code>DELETE</code> wiped history in the live test.</p></div>
+    <div class="card finding"><div class="ic">🔌</div><h3>No integrations yet</h3><p>No Notion or Google Calendar code exists. Tasks and projects live in Wren's own DB, separate from Home Base.</p></div>
+    <div class="card finding"><div class="ic">🛑</div><h3>No autonomy layer</h3><p>Every tool fires instantly. There are no approvals, no action log and no undo, all of which are needed before lanes act on their own.</p></div>
+  </div>
+
+  <h2>🗺️ Architecture: now and next</h2>
+  <p class="lede">Solid green = built. Dashed grey = planned. Dashed red = the gap that blocks everything.</p>
+  <div class="card diagram">
+    <svg viewBox="0 0 1000 560" role="img" aria-label="Architecture diagram: browser to API routes to Wren chief agent, which uses direct tools and the writing lane, all backed by Postgres; planned lanes, integrations and the autonomy kernel shown dashed.">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker>
+      </defs>
+      <!-- zones -->
+      <rect class="zone" x="10" y="10" width="980" height="92" rx="12"/><text class="zl" x="24" y="30">Browser</text>
+      <rect class="zone" x="10" y="114" width="980" height="92" rx="12"/><text class="zl" x="24" y="134">Next.js 16 API · Vercel</text>
+      <rect class="zone" x="10" y="218" width="980" height="216" rx="12"/><text class="zl" x="24" y="238">Agents</text>
+      <rect class="zone" x="10" y="446" width="980" height="104" rx="12"/><text class="zl" x="24" y="466">Data &amp; integrations</text>
+
+      <!-- browser -->
+      <g class="n built"><rect x="140" y="36" width="230" height="54" rx="10"/><text x="160" y="60">💬 Chat.tsx</text><text class="s" x="160" y="78">SSE stream · tool trace</text></g>
+      <g class="n built"><rect x="390" y="36" width="200" height="54" rx="10"/><text x="410" y="60">🔊 voice.ts</text><text class="s" x="410" y="78">TTS · dictation</text></g>
+      <g class="n plan"><rect x="610" y="36" width="210" height="54" rx="10"/><text x="630" y="60">✅ Approvals tray</text><text class="s" x="630" y="78">M2 · Web Push M5</text></g>
+
+      <!-- api -->
+      <g class="n risk"><rect x="40" y="140" width="190" height="54" rx="10"/><text x="58" y="164">🔓 proxy.ts (auth)</text><text class="s" x="58" y="182">missing · M1</text></g>
+      <g class="n built"><rect x="250" y="140" width="170" height="54" rx="10"/><text x="268" y="164">/api/chat</text><text class="s" x="268" y="182">POST · SSE</text></g>
+      <g class="n built"><rect x="440" y="140" width="170" height="54" rx="10"/><text x="458" y="164">/api/state</text><text class="s" x="458" y="182">GET · DELETE</text></g>
+      <g class="n built"><rect x="630" y="140" width="180" height="54" rx="10"/><text x="648" y="164">⏰ /api/cron/checkin</text><text class="s" x="648" y="182">daily · Bearer</text></g>
+      <g class="n plan"><rect x="830" y="140" width="145" height="54" rx="10"/><text x="846" y="164">/api/cron/tick</text><text class="s" x="846" y="182">M5 · GH Actions</text></g>
+
+      <!-- agents -->
+      <g class="n chief"><rect x="270" y="252" width="300" height="64" rx="12"/><text x="290" y="278">🐦 Wren · chief agent</text><text class="s" x="290" y="298">run.ts loop · wren.ts persona · state.ts</text></g>
+      <g class="n risk"><rect x="600" y="252" width="250" height="64" rx="12"/><text x="618" y="278">🛑 Policy · approvals · log</text><text class="s" x="618" y="298">missing · M2</text></g>
+      <g class="n built"><rect x="40" y="252" width="200" height="64" rx="12"/><text x="58" y="278">🔧 Direct tools</text><text class="s" x="58" y="298">capture · tasks · words</text></g>
+
+      <g class="n built"><rect x="40" y="350" width="150" height="62" rx="12"/><text x="56" y="376">✍️ Writing</text><text class="s" x="56" y="395">built</text></g>
+      <g class="n plan"><rect x="210" y="350" width="150" height="62" rx="12"/><text x="226" y="376">📅 Scheduling</text><text class="s" x="226" y="395">M3 · first</text></g>
+      <g class="n plan"><rect x="380" y="350" width="150" height="62" rx="12"/><text x="396" y="376">💼 Job</text><text class="s" x="396" y="395">M6</text></g>
+      <g class="n plan"><rect x="550" y="350" width="150" height="62" rx="12"/><text x="566" y="376">🏠 Household</text><text class="s" x="566" y="395">M7</text></g>
+      <g class="n plan"><rect x="720" y="350" width="150" height="62" rx="12"/><text x="736" y="376">📚 Learning</text><text class="s" x="736" y="395">M7</text></g>
+
+      <!-- data -->
+      <g class="n built"><rect x="40" y="476" width="250" height="58" rx="10"/><text x="58" y="500">🐘 Postgres / SQLite</text><text class="s" x="58" y="519">Kysely · 7 tables</text></g>
+      <g class="n built"><rect x="310" y="476" width="190" height="58" rx="10"/><text x="328" y="500">🧠 Anthropic API</text><text class="s" x="328" y="519">Sonnet · tool use</text></g>
+      <g class="n plan"><rect x="520" y="476" width="210" height="58" rx="10"/><text x="538" y="500">📓 Notion Home Base</text><text class="s" x="538" y="519">M4 · source of truth</text></g>
+      <g class="n plan"><rect x="750" y="476" width="225" height="58" rx="10"/><text x="768" y="500">🗓️ Google Calendar</text><text class="s" x="768" y="519">M3 · OAuth</text></g>
+
+      <!-- edges -->
+      <path class="e" d="M255 90 V140" marker-end="url(#ar)"/>
+      <path class="e" d="M335 194 V252" marker-end="url(#ar)"/>
+      <path class="e" d="M525 194 V252" marker-end="url(#ar)"/>
+      <path class="e" d="M720 194 C720 230 560 230 545 252" marker-end="url(#ar)"/>
+      <path class="e" d="M270 284 H240" marker-end="url(#ar)"/>
+      <path class="e" d="M300 316 C250 340 140 330 115 350" marker-end="url(#ar)"/>
+      <path class="e plan" d="M380 316 L290 350" marker-end="url(#ar)"/>
+      <path class="e plan" d="M430 316 L455 350" marker-end="url(#ar)"/>
+      <path class="e plan" d="M520 316 L620 350" marker-end="url(#ar)"/>
+      <path class="e plan" d="M560 316 C700 330 780 330 795 350" marker-end="url(#ar)"/>
+      <path class="e plan" d="M570 284 H600" marker-end="url(#ar)"/>
+      <path class="e" d="M24 300 C24 400 24 470 60 476" marker-end="url(#ar)"/>
+      <path class="e" d="M370 316 V476" marker-end="url(#ar)"/>
+      <path class="e plan" d="M285 412 C300 450 700 450 860 476" marker-end="url(#ar)"/>
+      <path class="e plan" d="M455 412 C470 450 600 450 625 476" marker-end="url(#ar)"/>
+    </svg>
+    <div class="legend">
+      <span><i class="sw" style="border-color:var(--ok)"></i>built</span>
+      <span><i class="sw" style="border-color:var(--accent);background:var(--accent-soft)"></i>chief agent</span>
+      <span><i class="sw" style="border-color:var(--plan);border-style:dashed"></i>planned</span>
+      <span><i class="sw" style="border-color:var(--miss);border-style:dashed;background:var(--miss-bg)"></i>blocking gap</span>
+    </div>
+  </div>
+
+  <h2>📋 Status board</h2>
+  <p class="lede">Every feature in the repo, with the file that proves it.</p>
+  <div class="board">
+    <div class="col ok"><h3>🟢 Working <span>13</span></h3>
+      <div class="tile">Streaming chat UI<small>components/Chat.tsx</small></div>
+      <div class="tile">Chief agent tool loop<small>agent/run.ts</small></div>
+      <div class="tile">Wren persona<small>agent/wren.ts</small></div>
+      <div class="tile">Direct tools ×10<small>agent/tools.ts</small></div>
+      <div class="tile">Writing sub-agent<small>skills/writing/</small></div>
+      <div class="tile">State snapshot<small>agent/state.ts</small></div>
+      <div class="tile">Conversation history<small>db/repo.ts</small></div>
+      <div class="tile">Clear conversation<small>api/state DELETE</small></div>
+      <div class="tile">Daily check-in cron<small>agent/checkin.ts</small></div>
+      <div class="tile">Check-in delivery<small>api/state ?deliver=1</small></div>
+      <div class="tile">Voice: speak<small>lib/voice.ts</small></div>
+      <div class="tile">Postgres (prod)<small>db/client.ts</small></div>
+      <div class="tile">SQLite (dev)<small>db/client.ts</small></div>
+    </div>
+    <div class="col part"><h3>🟡 Partial <span>3</span></h3>
+      <div class="tile">"Where I left off" recall: writing lane only, 50-capture scan<small>agent/tools.ts:290</small></div>
+      <div class="tile">Dictation: not on iOS Safari<small>lib/voice.ts:266</small></div>
+      <div class="tile">User name setting: read, never written<small>agent/run.ts:20</small></div>
+    </div>
+    <div class="col stub"><h3>🟣 Stubbed <span>1</span></h3>
+      <div class="tile">Focus / timer sessions (documented only)<small>README.md:184</small></div>
+    </div>
+    <div class="col miss"><h3>🔴 Missing <span>11</span></h3>
+      <div class="tile">Auth on routes<small>api/chat, api/state</small></div>
+      <div class="tile">Notion Home Base<small>—</small></div>
+      <div class="tile">Google Calendar<small>—</small></div>
+      <div class="tile">Manuscripts · Job Pipeline<small>—</small></div>
+      <div class="tile">Other 4 lanes<small>skills/</small></div>
+      <div class="tile">Approvals / policy tiers<small>—</small></div>
+      <div class="tile">Action log + undo<small>—</small></div>
+      <div class="tile">Push notifications<small>—</small></div>
+      <div class="tile">Long-term memory<small>run.ts:16 (40 rows)</small></div>
+      <div class="tile">Tests + CI<small>—</small></div>
+      <div class="tile">Lint (broken)<small>package.json:10</small></div>
+    </div>
+  </div>
+
+  <h2>🛣️ Roadmap</h2>
+  <p class="lede">The gold dot is next. Sizes are S, M or L.</p>
+  <div class="timeline">
+    <div class="ms cur"><i class="dot"></i><div class="card"><div class="tag">M1 · NEXT</div><h4>🔐 Foundation</h4><p>Auth, Next upgrade, lint, tests, CI, versioned migrations</p><span class="size">M</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M2</div><h4>🧩 Lanes + autonomy</h4><p>Shared sub-agent runner, policy tiers, approvals, action log, undo</p><span class="size">M</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M3</div><h4>📅 Scheduling</h4><p>Google OAuth, agenda in state, find time, block time</p><span class="size">L</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M4</div><h4>📓 Notion + Finder</h4><p>Home Base as source of truth, one search across everything</p><span class="size">L</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M5</div><h4>🔔 Push + memory</h4><p>Web Push, 15-min tick, morning brief, durable memories</p><span class="size">M</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M6</div><h4>💼 Job lane</h4><p>Pipeline tracking, follow-ups, drafts (sending needs approval)</p><span class="size">M</span></div></div>
+    <div class="ms"><i class="dot"></i><div class="card"><div class="tag">M7</div><h4>🏠📚 Household + Learning</h4><p>Mostly configuration on the M2 framework</p><span class="size">M+M</span></div></div>
+  </div>
+
+  <h2>🎯 First lane after writing: Scheduling</h2>
+  <div class="pick">
+    <div class="card">
+      <div class="lanes">
+        <div class="lane built"><span class="ic">✍️</span>Writing<br><small>built</small></div>
+        <div class="lane first"><span class="ic">📅</span>Scheduling<br><small>next</small></div>
+        <div class="lane"><span class="ic">💼</span>Job</div>
+        <div class="lane"><span class="ic">🏠</span>Household</div>
+        <div class="lane"><span class="ic">📚</span>Learning</div>
+      </div>
+      <p class="lede" style="margin:14px 0 0">🔎 <b>Finding things</b> isn't a lane. It's a chief-level <code>find</code> skill across Notion, Calendar and history that every lane can use (M4).</p>
+    </div>
+    <div class="card">
+      <ul class="why">
+        <li>😮‍💨 <b>Your biggest drain</b>, and the payoff is daily.</li>
+        <li>🔗 <b>Multiplies every lane.</b> Writing blocks, interviews, appointments and study time all go on the calendar.</li>
+        <li>↩️ <b>Safe autonomy first.</b> Wren-tagged blocks on your own calendar are reversible.</li>
+        <li>📐 <b>Clean API.</b> It's the least ambiguous lane to build.</li>
+      </ul>
+    </div>
+  </div>
+
+  <h2>🤝 Autonomy model</h2>
+  <div class="tiers">
+    <div class="card tier t0"><span class="ic">🟢</span><h3>T0 · Auto, quiet</h3><p>Reads, searches, capture, logging words, adding tasks, memory</p><div class="how">👀 Visible in the chat trace</div></div>
+    <div class="card tier t1"><span class="ic">🟡</span><h3>T1 · Auto + notify</h3><p>Create or move Wren-tagged calendar blocks, update Notion task status, file to the inbox</p><div class="how">↩️ Undo button · Activity tray · morning digest</div></div>
+    <div class="card tier t2"><span class="ic">🟣</span><h3>T2 · Ask first</h3><p>Anything involving other people, events Wren didn't create, sending, deleting, bulk edits</p><div class="how">📲 Push: Approve / Deny / Edit · expires in 48h</div></div>
+    <div class="card tier t3"><span class="ic">🔴</span><h3>T3 · Never</h3><p>Payments, credentials, sharing or permissions, deleting databases</p><div class="how">🚫 The tool doesn't exist. Wren offers to draft instead.</div></div>
+  </div>
+  <p class="lede" style="margin-top:10px">An ambiguous match (more than one candidate) always escalates T1 to T2. Quiet hours run 21:30–08:00.</p>
+
+  <div class="next">
+    <h2>👉 Builder's next step</h2>
+    <p style="margin:0">Build <b>M1 Foundation</b> from <code>docs/wren/BUILDER_BRIEF.md</code>, in this order:</p>
+    <ol>
+      <li>Upgrade Next to ≥16.3.8</li>
+      <li>Replace <code>next lint</code> with ESLint</li>
+      <li>Add Vitest tests</li>
+      <li>Passphrase auth in <code>src/proxy.ts</code> (with a handler check as well)</li>
+      <li>Versioned migrations</li>
+      <li>Fix the time zone and abort handling</li>
+      <li>Add CI</li>
+      <li>Update the docs</li>
+    </ol>
+  </div>
+
+  <footer>Sources: <code>docs/wren/ANALYSIS.md</code> · <code>PLAN.md</code> · <code>BUILDER_BRIEF.md</code></footer>
+</div>
+</body>
+</html>
