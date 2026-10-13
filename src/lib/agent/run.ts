@@ -69,7 +69,11 @@ async function loadHistory(): Promise<Anthropic.MessageParam[]> {
  * events — "Getting the writing side of my brain on this" has to appear while
  * the sub-agent runs, and the runner doesn't surface tool boundaries.
  */
-export async function* runWren(userText: string): AsyncGenerator<StreamEvent> {
+export async function* runWren(
+  userText: string,
+  options: { signal?: AbortSignal } = {},
+): AsyncGenerator<StreamEvent> {
+  const { signal } = options;
   const client = anthropic();
   const name = await userName();
   const snapshot = await buildSnapshot(name);
@@ -112,21 +116,28 @@ export async function* runWren(userText: string): AsyncGenerator<StreamEvent> {
 
   try {
     for (let i = 0; i < MAX_ITERATIONS; i++) {
-      const stream = client.messages.stream({
-        model: MODEL,
-        max_tokens: 32000,
-        system: [
-          {
-            type: "text",
-            text: WREN_SYSTEM,
-            cache_control: { type: "ephemeral" },
-          },
-        ],
-        thinking: { type: "adaptive", display: "summarized" },
-        output_config: { effort: WREN_EFFORT },
-        tools: tools.map((t) => t.def),
-        messages,
-      });
+      // Checked between rounds as well as inside the stream, so a tab closed
+      // during a slow tool call doesn't start another model call.
+      if (signal?.aborted) return;
+
+      const stream = client.messages.stream(
+        {
+          model: MODEL,
+          max_tokens: 32000,
+          system: [
+            {
+              type: "text",
+              text: WREN_SYSTEM,
+              cache_control: { type: "ephemeral" },
+            },
+          ],
+          thinking: { type: "adaptive", display: "summarized" },
+          output_config: { effort: WREN_EFFORT },
+          tools: tools.map((t) => t.def),
+          messages,
+        },
+        { signal },
+      );
 
       for await (const event of stream) {
         if (event.type !== "content_block_delta") continue;
@@ -210,6 +221,9 @@ export async function* runWren(userText: string): AsyncGenerator<StreamEvent> {
     await markCheckinsDelivered(snapshot.pendingCheckinIds);
     yield { type: "done", text: spoken };
   } catch (error) {
+    // Walking away isn't a failure. Whatever was saved stays consistent:
+    // sanitize() drops a tool_use that never got its result on the next load.
+    if (signal?.aborted) return;
     yield {
       type: "error",
       message: error instanceof Error ? error.message : "Something went wrong upstream.",

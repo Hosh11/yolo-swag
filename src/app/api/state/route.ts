@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/auth";
 import { userName } from "@/lib/agent/run";
 import {
   appendHistory,
@@ -21,6 +22,9 @@ export const dynamic = "force-dynamic";
  * so a background refresh can't silently consume a nudge the user never saw.
  */
 export async function GET(request: Request) {
+  const denied = await requireSession(request);
+  if (denied) return denied;
+
   try {
     return await readState(request);
   } catch (error) {
@@ -86,7 +90,10 @@ async function readState(request: Request) {
 }
 
 /** Wipe the conversation. Projects, tasks, and captures are untouched. */
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  const denied = await requireSession(request);
+  if (denied) return denied;
+
   try {
     await clearHistory();
     return Response.json({ ok: true });

@@ -1,3 +1,4 @@
+import { requireSession } from "@/lib/auth";
 import { runWren } from "@/lib/agent/run";
 import type { StreamEvent } from "@/lib/agent/types";
 
@@ -7,6 +8,9 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 300;
 
 export async function POST(request: Request) {
+  const denied = await requireSession(request);
+  if (denied) return denied;
+
   let message: unknown;
   try {
     ({ message } = await request.json());
@@ -24,10 +28,13 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of runWren(message.trim())) {
+        for await (const event of runWren(message.trim(), { signal: request.signal })) {
           controller.enqueue(send(event));
         }
       } catch (error) {
+        // Once the client has gone the stream is closed and enqueue throws;
+        // there is nobody left to tell.
+        if (request.signal.aborted) return;
         controller.enqueue(
           send({
             type: "error",
@@ -35,7 +42,11 @@ export async function POST(request: Request) {
           }),
         );
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by the client disconnecting.
+        }
       }
     },
   });

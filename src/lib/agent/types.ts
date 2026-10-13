@@ -1,6 +1,7 @@
 import type Anthropic from "@anthropic-ai/sdk";
 
 /** A tool definition bound to the code that runs it. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any -- deliberate: the registry holds tools with different input types, and `unknown` would make every handler fail to assign
 export interface AgentTool<I = any> {
   def: Anthropic.Tool;
   run(input: I): Promise<unknown>;

@@ -164,6 +164,17 @@ export function getDb(): Promise<Kysely<Database>> {
   return dbPromise;
 }
 
+/**
+ * Drops the memoised handle so the next getDb() reads DATABASE_URL afresh.
+ * Exists for tests, which point each suite at its own SQLite file; nothing in
+ * the app should call it.
+ */
+export async function __resetDbForTests(): Promise<void> {
+  const pending = dbPromise;
+  dbPromise = null;
+  if (pending) await (await pending).destroy();
+}
+
 export const nowIso = (): string => new Date().toISOString();
 
 /** YYYY-MM-DD in the given IANA zone. Streaks are a human-day concept. */

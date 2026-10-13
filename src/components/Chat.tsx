@@ -40,6 +40,7 @@ export default function Chat() {
 
   // Restore the voice preference before the first reply can arrive.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- must read browser-only state after mount to avoid a hydration mismatch (see canSpeak above)
     setCanSpeak(speechSupported());
     try {
       setVoice(window.localStorage.getItem("wren:voice") === "on");
@@ -345,6 +346,9 @@ function greeting(): string {
  * routes raise.
  */
 async function serverError(response: Response): Promise<string> {
+  // A lapsed or missing session: there's nothing to show but the login page.
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination -- full reload on purpose: it drops all client state along with the dead session
+  if (response.status === 401) window.location.href = "/login";
   try {
     const body = await response.json();
     if (typeof body?.error === "string" && body.error.trim()) return body.error;

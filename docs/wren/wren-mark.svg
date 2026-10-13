@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Wren">
+  <title>Wren</title>
+  <!-- Sleek wren silhouette: one swoosh, cocked tail. Uses currentColor so it takes the theme's ember. -->
+  <path fill="currentColor" d="M61 27.2 L52.2 24.6 C49.5 17.2 39.5 15.8 34.8 22.4 L13.4 7.6 C11.4 6.2 8.6 8.4 9.9 10.6 L22.4 32.4 C20.6 43.6 29.6 52.6 40.2 51.2 C49.4 50 54.6 41.2 52.4 31.6 L53.6 28.2 Z"/>
+</svg>

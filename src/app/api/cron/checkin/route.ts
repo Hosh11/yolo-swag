@@ -1,3 +1,4 @@
+import { env } from "@/lib/env";
 import { runCheckinPass } from "@/lib/agent/checkin";
 
 export const runtime = "nodejs";
@@ -12,7 +13,7 @@ export const maxDuration = 120;
  * short-circuit before any model call, so an over-eager schedule costs nothing.
  */
 export async function GET(request: Request) {
-  const secret = process.env.CRON_SECRET;
+  const secret = env("CRON_SECRET");
 
   if (secret) {
     if (request.headers.get("authorization") !== `Bearer ${secret}`) {

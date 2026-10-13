@@ -248,6 +248,7 @@ export function useSpeaker(enabled: boolean) {
   }, [enabled, utter]);
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- cancel() has to stop the browser's speech queue, an external system, whenever voice is switched off
     if (!enabled) cancel();
   }, [enabled, cancel]);
 
@@ -273,11 +274,13 @@ export function useDictation(handlers: {
 
   // Handlers are read through a ref so re-renders don't tear down the session.
   const latest = useRef(handlers);
+  // eslint-disable-next-line react-hooks/refs -- deliberate latest-ref pattern: assigning during render keeps the recognition callbacks current without restarting the session
   latest.current = handlers;
 
   useEffect(() => {
     const Ctor = recognitionCtor();
     if (!Ctor) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- SpeechRecognition only exists in the browser, so support can only be detected after mount
     setSupported(true);
 
     const instance = new Ctor();

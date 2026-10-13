@@ -1,4 +1,5 @@
 import { today } from "@/lib/db/client";
+import { timeZone } from "@/lib/env";
 import {
   listCaptures,
   listProjects,
@@ -41,7 +42,7 @@ export async function buildSnapshot(userName: string): Promise<Snapshot> {
 
   lines.push("<current_state>");
   lines.push(`User: ${userName}`);
-  lines.push(`Today: ${t} (${new Date().toLocaleDateString("en-GB", { weekday: "long" })})`);
+  lines.push(`Today: ${t} (${new Date().toLocaleDateString("en-GB", { weekday: "long", timeZone: timeZone("WREN_TIMEZONE") })})`);
   lines.push("");
 
   lines.push("Active projects:");
