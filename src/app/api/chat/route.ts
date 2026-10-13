@@ -28,10 +28,13 @@ export async function POST(request: Request) {
   const stream = new ReadableStream({
     async start(controller) {
       try {
-        for await (const event of runWren(message.trim())) {
+        for await (const event of runWren(message.trim(), { signal: request.signal })) {
           controller.enqueue(send(event));
         }
       } catch (error) {
+        // Once the client has gone the stream is closed and enqueue throws;
+        // there is nobody left to tell.
+        if (request.signal.aborted) return;
         controller.enqueue(
           send({
             type: "error",
@@ -39,7 +42,11 @@ export async function POST(request: Request) {
           }),
         );
       } finally {
-        controller.close();
+        try {
+          controller.close();
+        } catch {
+          // Already closed by the client disconnecting.
+        }
       }
     },
   });

@@ -84,3 +84,26 @@ describe("buildSnapshot()", () => {
     expect(text).toContain("last touched 9d ago");
   });
 });
+
+describe("buildSnapshot() weekday", () => {
+  // 23:30 UTC on a Tuesday is already Wednesday in Auckland.
+  const lateTuesdayUtc = "2026-03-10T23:30:00Z";
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it("names the weekday in WREN_TIMEZONE, not the server's zone", async () => {
+    vi.setSystemTime(new Date(lateTuesdayUtc));
+    vi.stubEnv("WREN_TIMEZONE", "Pacific/Auckland");
+    const { text } = await buildSnapshot("Josh");
+    expect(text).toContain("Today: 2026-03-11 (Wednesday)");
+  });
+
+  it("agrees with the date it prints next to it", async () => {
+    vi.setSystemTime(new Date(lateTuesdayUtc));
+    vi.stubEnv("WREN_TIMEZONE", "UTC");
+    const { text } = await buildSnapshot("Josh");
+    expect(text).toContain("Today: 2026-03-10 (Tuesday)");
+  });
+});
