@@ -24,6 +24,47 @@ npm run dev
 Set `WREN_USER_NAME` in `.env.local` — Wren addresses you by name, and the
 default placeholder will feel wrong immediately.
 
+Checks, all of which CI runs on every push:
+
+```bash
+npm run typecheck     # tsc --noEmit
+npm run lint          # eslint .
+npm test              # vitest run; temp SQLite, no network, no API key
+npm run build
+```
+
+TypeScript is pinned to 6.0 because `typescript-eslint` doesn't load under 7.
+Lift the pin once it supports 7.1+.
+
+## Access
+
+Wren has one user, so access is a single passphrase rather than accounts.
+
+- `WREN_PASSPHRASE` is what you type on the login page.
+- `WREN_SESSION_SECRET` signs the cookie that keeps you signed in for 30 days.
+  Generate it with `openssl rand -base64 32`. Changing it signs you out
+  everywhere.
+
+Never commit either value. With both unset in development everything is open
+and the server logs one warning. In production, if either is missing, every
+protected route answers 503 and says what to set, rather than running open.
+`/api/cron/*` is exempt from the cookie check because Vercel Cron has no
+cookie; it keeps its own `CRON_SECRET` bearer check.
+
+## Deploy checklist
+
+Set these in Vercel (names only; values live in the dashboard):
+
+- `ANTHROPIC_API_KEY`
+- `DATABASE_URL` (Postgres; SQLite is rejected on Vercel)
+- `CRON_SECRET`
+- `WREN_PASSPHRASE`
+- `WREN_SESSION_SECRET`
+- `WREN_USER_NAME`
+- `WREN_TIMEZONE`
+
+A blank value counts as unset, so check none are saved empty.
+
 ## How it's put together
 
 ```
@@ -35,7 +76,9 @@ src/lib/agent/     Wren herself
   registry.ts        which tools Wren gets
 src/lib/skills/    sub-skills
   writing/           its own prompt, own tools, own loop
-src/lib/db/        schema, migrations, repository
+src/lib/db/        schema, versioned migrations (Kysely Migrator), repository
+src/lib/auth.ts    passphrase check and signed session cookie
+src/proxy.ts       redirects/401s anyone without a session
 src/app/api/chat   SSE endpoint
 ```
 
@@ -182,5 +225,4 @@ route refuses to run rather than leaving a token-burning endpoint exposed.
 ## Not built yet
 
 - **Focus/timer sessions** for the writing sub-skill.
-- Everything is single-user with no auth. Don't deploy it on a public URL
-  without putting something in front of it.
+- Anything beyond a single user. Sign-in is one shared passphrase.
