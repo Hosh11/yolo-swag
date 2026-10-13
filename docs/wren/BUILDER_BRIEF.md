@@ -165,11 +165,18 @@ Design (decided, don't re-litigate):
 
 ## 6. Commands
 
+### Which model to run the builder on
+**Sonnet is the right default for M1.** This brief spells out every step and acceptance check, which is the kind of well-scoped, test-verified work Sonnet handles well, and it uses much less of the plan's limits. Two guardrails:
+- **Step 4 (auth) is security code.** Before merging, have a stronger-model pass (Opus, or `/code-review` / `/security-review`) review the auth diff specifically.
+- If the builder gets stuck twice on the same problem, or wants to change the design, **stop and surface it** rather than improvising.
+
+
 ### Where things run
 **Production = Vercel (always on). Development = the user's PC.** See PLAN.md §2a. Build M1 so the app works in both places: nothing Vercel-only in the auth code, and SQLite stays fully supported for local development.
 
 ### First-time setup on the user's PC
-- Install **Node 22 LTS** and **Git**. On Windows, either native (PowerShell) or WSL2 (Ubuntu) works.
+- The user's PC runs **Windows** and is **not on 24/7**, which is why production stays on Vercel. Develop natively in PowerShell (WSL2 is optional).
+- Install **Node 22 LTS** (from nodejs.org) and **Git for Windows**.
   - **Native Windows:** `better-sqlite3` normally installs a prebuilt binary for Node 22 x64. If it tries to compile, install the "Desktop development with C++" workload from the Visual Studio Build Tools, or use WSL2.
   - `npm run cron:checkin` uses `curl`, which ships with Windows 10 and later.
 - Then:
@@ -191,6 +198,8 @@ npm test                           # vitest run (after step 3)
 npm run build && npm start         # prod-mode smoke test
 npm run cron:checkin               # hits /api/cron/checkin?force=1 (needs CRON_SECRET header once auth exists in prod mode)
 ```
+
+**On Windows (PowerShell):** use `Copy-Item .env.example .env.local` in place of `cp`. Everything else in the block above works as-is. Run the bash-style smoke test below in **Git Bash** (it ships with Git for Windows), or call `curl.exe` explicitly in PowerShell, because plain `curl` there is an alias for `Invoke-WebRequest`.
 
 Smoke test after step 4 (prod mode, with the passphrase set):
 

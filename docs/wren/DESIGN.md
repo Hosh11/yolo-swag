@@ -1,6 +1,6 @@
 # Wren: Presence and Design Direction
 
-> Companion to [PLAN.md](./PLAN.md). This covers **who Wren is when you talk to her** (persona and conversation), **how she sounds** (voice), and **what she looks like** (UI). Visual mock: [`wren-ui-concept.html`](./wren-ui-concept.html).
+> Companion to [PLAN.md](./PLAN.md). This covers **who Wren is when you talk to her** (persona and conversation), **how she sounds** (voice), and **what she looks like** (UI). Visual mock: [`wren-ui-concept.html`](./wren-ui-concept.html). Logo: [`wren-mark.svg`](./wren-mark.svg).
 > Status: **proposal**, built in milestone **M2 · Presence**. Nothing here is implemented yet.
 
 ---
@@ -80,7 +80,6 @@ If the turn includes <mode>voice</mode>, everything you write will be spoken by 
 | Send `mode: "voice" \| "text"` from the client, and append `<mode>voice</mode>` to the **user turn** (not the system prompt) | `Chat.tsx` → `api/chat/route.ts` → `run.ts:93-102` | Keeps the system prompt cacheable. Voice and text replies differ. |
 | Add a `<time_of_day>` line to the snapshot (morning, afternoon, evening, late, in `WREN_TIMEZONE`) | `state.ts:44` | Lets her open naturally without guessing |
 | Add a "greet" turn: on app open with no message today, the client requests a short opener (POST `/api/chat` with `{ kind: "open" }`) | `Chat.tsx`, `run.ts` | The Jarvis "Morning. Two things…" moment. Rate-limit it to one per 4h so it isn't chatty. |
-| Optional **form of address** setting (name, a nickname, or "boss") | `settings.user_address` | A cheap personality win, and it uses the `settings` table, which is unused today |
 
 ---
 
@@ -90,12 +89,12 @@ The Web Speech API only plays the voices already on your device. Default voices 
 
 | Layer | Recommendation | Fallback | Notes |
 |---|---|---|---|
-| **Text-to-speech** | **ElevenLabs** streaming TTS with a warm British female voice, *or* **OpenAI `gpt-4o-mini-tts`**, which takes a style instruction ("warm, dry British woman, unhurried") | Current Web Speech code (`voice.ts`) | ElevenLabs gives the best character, OpenAI is cheaper and steerable. **Check current pricing before choosing.** The API key stays server-side, behind an authed `/api/voice/tts` route that streams audio. |
-| **Speech-to-text** | Browser `MediaRecorder` → `/api/voice/stt` → a hosted transcription model (OpenAI, Deepgram or ElevenLabs). **This fixes iPad/iPhone dictation.** | Browser `SpeechRecognition` where it exists | Local Whisper is possible if Wren runs on your PC (see §5 of PLAN.md) |
+| **Text-to-speech** | **ElevenLabs** streaming TTS with a warm British female voice (decided; see §6) | Current Web Speech code (`voice.ts`); Edge's free natural voices on Windows | Flat monthly plan. The API key stays server-side, behind an authed `/api/voice/tts` route that streams audio. |
+| **Speech-to-text** | Browser `MediaRecorder` → `/api/voice/stt` → ElevenLabs Scribe (same plan as TTS). **This fixes iPad/iPhone dictation.** | Browser `SpeechRecognition` where it exists | Local Whisper is possible if Wren runs on your PC (see §5 of PLAN.md) |
 | **Conversation mode** | One tap starts a hands-free loop: she speaks, then auto-listens, with voice-activity detection ending your turn. Talking over her stops her (barge-in already exists: `Chat.tsx:103`). | Push-to-talk | iOS still requires the first audio call inside a tap. Reuse the `speakNow` unlock pattern (`voice.ts:213-225`). |
 | **Speaking style** | Sentence-chunked streaming, as now (`voice.ts:126`), fed to the TTS stream | — | Already the right architecture. Swap the engine, not the pipeline. |
 
-Anthropic's API doesn't do speech, so this adds **one new provider and key** (`ELEVENLABS_API_KEY` or `OPENAI_API_KEY`). The persona and brain stay on Claude.
+Anthropic's API doesn't do speech, so this adds **one new provider and key** (`ELEVENLABS_API_KEY`). The persona and brain stay on Claude.
 
 ---
 
@@ -149,12 +148,35 @@ Wren's serif voice versus the sans UI (`globals.css:28-33`), the understated too
 
 ---
 
-## 5. Open questions for you
+## 5. Brand mark: the Ember and the wren
 
-| # | Question | My default |
+The **Ember** is Wren's *presence*: the animated orb that breathes, listens and speaks. The **wren** is her *mark*: a sleek, single-shape silhouette whose cocked tail is the giveaway. The app icon combines them, with a charcoal wren sitting inside a glowing ember tile.
+
+| Asset | Spec |
+|---|---|
+| Mark | [`wren-mark.svg`](./wren-mark.svg). A 64×64 viewBox with one path, filled with `currentColor` so it takes the theme ember. The only detail is an eye dot at large sizes; no feathers, no outline. |
+| Header | The mark at 22–28px in `--color-ember`, beside "Wren" in Fraunces |
+| App icon / PWA / favicon | Rounded-square tile with the Ember radial gradient and the mark in charcoal (`#1C1814`) at about 62% of the tile. Export 512, 192, 180 (Apple touch) and 32px. |
+| Never | Stack the mark *on* the animated Ember in the UI. Presence and logo stay separate so the orb can move freely. |
+
+## 6. Voice plan: decided
+
+| | Choice |
+|---|---|
+| **Provider** | **ElevenLabs**, one flat monthly plan covering both speaking (TTS) and listening (speech-to-text, "Scribe"). Start on **Starter (about $6/mo)** and move to **Creator (about $22/mo)** only if you hit the monthly credit cap. Prices are from 2026 third-party summaries; confirm at elevenlabs.io/pricing. |
+| **Keeping it one price** | In the ElevenLabs dashboard, make sure **usage-based overage billing is off** so hitting the cap *stops* rather than charges (**verify this setting exists on your tier**). In-app, `/api/voice/tts` checks the remaining quota and falls back to the free device voice when it's low, with a quiet note in the trace. |
+| **Stretching credits** | Use ElevenLabs' faster, cheaper "Flash/Turbo" model for chat replies (check the current credit rate per character). Speak only the reply, never the margin notes. Cap spoken length in voice mode (the persona already asks for 2–3 sentences). |
+| **Rough budget** | About 1 credit per character on standard models, so a 300-character reply is about 300 credits. Starter's ~30k credits is roughly 100 spoken replies a month. Speech-to-text costs ~330 credits per audio minute (**verify**). If you talk to her daily, expect Creator. |
+| **Free fallback on your PC** | **Microsoft Edge on Windows** exposes Microsoft's neural "Online (Natural)" voices (for example Sonia and Libby, both British) through the browser speech API, at no cost. `voice.ts` already prefers "natural" and those names (`voice.ts:61-97`). Not available on the iPad. |
+| **Voice choice** | Pick a British female voice from the ElevenLabs library by ear. Store its `ELEVENLABS_VOICE_ID` as an env var so it can change without a deploy. |
+| **New env vars** | `ELEVENLABS_API_KEY`, `ELEVENLABS_VOICE_ID`, `ELEVENLABS_TTS_MODEL` (all server-only) |
+
+## 7. Decisions log
+
+| # | Question | Decision (13 Oct 2026) |
 |---|---|---|
-| D1 | Voice provider: ElevenLabs (best character) or OpenAI TTS (cheaper)? Is paying for voice OK at all? | Try both voices behind one interface. You pick by ear. |
-| D2 | Should Wren greet you out loud when the app opens in voice mode? | Yes, at most once every 4 hours |
-| D3 | Form of address: your name, a nickname, or something cheekier? | Your name (`WREN_USER_NAME`) |
-| D4 | Theme: auto by sunset, or always dark? | Auto, with an override |
-| D5 | Is the Ember the right signature, or would you rather have a literal bird mark? | The Ember, with a tiny wren glyph in the header |
+| D1 | Voice provider and budget | **ElevenLabs, flat plan**, Starter first (§6) |
+| D2 | Greet out loud on open | Yes, at most once every 4 hours (default, not objected to) |
+| D3 | Form of address | **Your name**, via `WREN_USER_NAME`. Drop the separate "address" setting from M2. |
+| D4 | Theme | Auto by sunset, with an override (default) |
+| D5 | Signature | **Ember as presence plus a sleek wren as the mark** (§5) |

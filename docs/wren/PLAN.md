@@ -29,7 +29,7 @@
 | **Notifications** | **Web Push** (installable PWA) for approvals and the morning brief, plus an in-app Activity/Approvals tray. Email digest later, optionally. | Free, works on iOS 16.4+ for home-screen apps, no extra account. Flagged as an open question below. |
 | **Model** | Keep `WREN_MODEL` configurable. Lanes get their own effort env (`WREN_<LANE>_EFFORT`), following the `client.ts` pattern. | Already the convention |
 | **Hosting** | **Cloud brain, local workshop.** Vercel stays production (always on). Your PC is the dev machine (SQLite, `npm run dev`). Details in §2a. | Proactive autonomy only works if Wren is awake when you aren't looking |
-| **Voice** | A premium TTS provider (ElevenLabs or OpenAI) plus server-side STT, behind authed routes. Web Speech stays as the fallback. See [DESIGN.md §3](./DESIGN.md#3-voice). | Device voices are robotic, and iOS has no browser speech recognition |
+| **Voice** | **ElevenLabs** flat monthly plan for both TTS and STT, behind authed routes. Web Speech stays as the fallback (free natural voices in Edge on Windows). See [DESIGN.md §3](./DESIGN.md#3-voice). | Device voices are robotic, and iOS has no browser speech recognition |
 
 ### 2a. Hosting: Vercel vs your PC
 
@@ -113,11 +113,11 @@ Why second: it's what you touch every day, it needs no integrations, and a Wren 
 | Persona: the "Conversation, not transactions", "Acting out loud" and "Speaking aloud" sections, and adjusted length guidance | `src/lib/agent/wren.ts` (still one frozen string) |
 | `mode: voice\|text` from the client, appended to the user turn as `<mode>voice</mode>` | `Chat.tsx`, `api/chat/route.ts`, `run.ts:93-102` |
 | Time-of-day line in the snapshot, and an app-open greeting turn (≤1 per 4h) | `state.ts`, `run.ts`, `Chat.tsx` |
-| Premium TTS behind `/api/voice/tts` (streams audio), with a provider interface (ElevenLabs / OpenAI) and Web Speech fallback | `src/app/api/voice/tts/route.ts`, `src/lib/voice/tts-*.ts`, `src/lib/voice.ts` |
+| ElevenLabs TTS behind `/api/voice/tts` (streams audio), behind a small provider interface, with a quota check and Web Speech fallback | `src/app/api/voice/tts/route.ts`, `src/lib/voice/tts-*.ts`, `src/lib/voice.ts` |
 | Server STT: `MediaRecorder` → `/api/voice/stt` (fixes iOS) | `src/app/api/voice/stt/route.ts`, `Composer.tsx` |
 | Conversation mode: hands-free loop, voice-activity detection, barge-in, full-screen Ember with captions | `src/components/ConversationMode.tsx`, `src/components/Ember.tsx` |
+| Brand: `wren-mark.svg` in the header, plus app icon, favicon and PWA icons (bird inside Ember tile) | `public/`, `src/app/icon.*`, `layout.tsx` |
 | Lamplight redesign: tokens, Fraunces and Inter via `next/font`, letters-not-bubbles, margin-note tool trace, Today rail (placeholder data until M4), theme follows the sun | `globals.css`, `layout.tsx`, `Chat.tsx`, `ToolTrace.tsx`, `src/components/TodayRail.tsx` |
-| Form-of-address setting | `settings` table via `repo.ts`, `run.ts:18-24` |
 
 **Acceptance:**
 - In voice mode on an iPad you can hold a 5-turn hands-free conversation: she speaks in the chosen premium voice, auto-listens, and stops when you talk over her.
@@ -199,5 +199,5 @@ Household: recurring chores and appointments via calendar. Learning: study plans
 | Q6 | Is the approval expiry window of 48h right? | 48h |
 | Q7 | Which Google calendar(s) can Wren write to? | Primary only, Wren-tagged events only for T1 |
 | Q8 | Does Wren keep her own copy of Writing Sessions for streak maths, or read Notion? | Read Notion, cache in Postgres |
-| Q9 | Is your PC on 24/7? Windows native or WSL? | Not 24/7, so hybrid: Vercel for production, PC for development (§2a) |
-| Q10 | Is paying for a voice provider OK? (see DESIGN.md D1–D5 for the design questions) | Yes, if the voice sounds right. Compare by ear. |
+| Q9 | Is your PC on 24/7? Windows native or WSL? | ✅ **Decided:** not 24/7, Windows. Hybrid: Vercel for production, the PC for development (§2a). |
+| Q10 | Is paying for a voice provider OK? | ✅ **Decided:** yes, one flat price. ElevenLabs Starter, then Creator if needed ([DESIGN.md §6](./DESIGN.md#6-voice-plan-decided)). |
