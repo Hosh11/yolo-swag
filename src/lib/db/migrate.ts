@@ -1,117 +1,38 @@
 import { sql, type Kysely } from "kysely";
+import { Migrator, type Migration, type MigrationProvider } from "kysely/migration";
 import type { Database } from "./schema";
+import * as baseline from "./migrations/0001_baseline";
 
 /**
- * DDL that is valid, and means the same thing, in both SQLite and Postgres.
- * See the note at the top of schema.ts for why the column types look like this.
+ * Migrations are listed inline rather than read from a folder.
  *
- * Statements are idempotent, so this doubles as the migration runner for now.
- * When the schema starts changing under real data, swap this for Kysely's
- * versioned Migrator — the table shapes won't have to move.
+ * Kysely's FileMigrationProvider scans the filesystem at runtime, which finds
+ * nothing once Vercel has bundled the app. Importing each migration puts it in
+ * the bundle. Add new ones here, in order, with a zero-padded numeric prefix:
+ * Kysely applies them alphabetically and refuses to run if history disagrees.
  */
-const STATEMENTS = [
-  `CREATE TABLE IF NOT EXISTS projects (
-     id                text PRIMARY KEY,
-     name              text NOT NULL,
-     description       text,
-     status            text NOT NULL DEFAULT 'active',
-     deadline          text,
-     word_goal         integer,
-     created_at        text NOT NULL,
-     updated_at        text NOT NULL,
-     last_activity_at  text
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS tasks (
-     id           text PRIMARY KEY,
-     project_id   text REFERENCES projects(id) ON DELETE SET NULL,
-     title        text NOT NULL,
-     notes        text,
-     status       text NOT NULL DEFAULT 'open',
-     priority     integer NOT NULL DEFAULT 2,
-     due_date     text,
-     created_at   text NOT NULL,
-     updated_at   text NOT NULL,
-     completed_at text
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS capture_items (
-     id         text PRIMARY KEY,
-     content    text NOT NULL,
-     kind       text NOT NULL DEFAULT 'idea',
-     tags       text NOT NULL DEFAULT '[]',
-     project_id text REFERENCES projects(id) ON DELETE SET NULL,
-     processed  integer NOT NULL DEFAULT 0,
-     created_at text NOT NULL
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS writing_log (
-     id         text PRIMARY KEY,
-     project_id text REFERENCES projects(id) ON DELETE SET NULL,
-     logged_on  text NOT NULL,
-     words      integer NOT NULL,
-     note       text,
-     created_at text NOT NULL
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS checkins (
-     id           text PRIMARY KEY,
-     message      text NOT NULL,
-     reason       text,
-     kind         text NOT NULL DEFAULT 'nudge',
-     created_at   text NOT NULL,
-     delivered_at text
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS conversation_history (
-     id         text PRIMARY KEY,
-     role       text NOT NULL,
-     content    text NOT NULL,
-     text       text NOT NULL,
-     created_at text NOT NULL
-   )`,
-
-  `CREATE TABLE IF NOT EXISTS settings (
-     key        text PRIMARY KEY,
-     value      text NOT NULL,
-     updated_at text NOT NULL
-   )`,
-
-  `CREATE INDEX IF NOT EXISTS idx_tasks_status ON tasks(status, priority)`,
-  `CREATE INDEX IF NOT EXISTS idx_tasks_project ON tasks(project_id)`,
-  `CREATE INDEX IF NOT EXISTS idx_capture_unprocessed ON capture_items(processed, created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_writing_log_day ON writing_log(logged_on)`,
-  `CREATE INDEX IF NOT EXISTS idx_checkins_undelivered ON checkins(delivered_at, created_at)`,
-  `CREATE INDEX IF NOT EXISTS idx_history_created ON conversation_history(created_at)`,
-];
+const provider: MigrationProvider = {
+  getMigrations: async (): Promise<Record<string, Migration>> => ({
+    "0001_baseline": baseline,
+  }),
+};
 
 /**
- * Postgres error codes for "someone else just created this".
+ * Applies anything not yet recorded in `kysely_migration`.
  *
- * `CREATE TABLE IF NOT EXISTS` is idempotent but not atomic: two serverless
- * cold starts racing on the first request after a deploy can both pass the
- * existence check and then collide in the catalog. The statements are
- * identical, so losing the race is a success, not a failure.
+ * Kysely takes a lock around the run, so two serverless cold starts racing on
+ * the first request after a deploy take turns instead of colliding. The
+ * baseline also tolerates "already exists" errors itself, as a belt for the
+ * case where a lock table is created by both at once.
  */
-const ALREADY_EXISTS = new Set([
-  "23505", // unique_violation, typically on pg_type
-  "42P07", // duplicate_table
-  "42710", // duplicate_object
-]);
-
-function isRace(error: unknown): boolean {
-  const code = (error as { code?: unknown })?.code;
-  return typeof code === "string" && ALREADY_EXISTS.has(code);
-}
-
 export async function migrate(db: Kysely<Database>): Promise<void> {
-  for (const statement of STATEMENTS) {
-    try {
-      await sql.raw(statement).execute(db);
-    } catch (error) {
-      if (!isRace(error)) throw error;
-    }
+  const { error, results } = await new Migrator({ db, provider }).migrateToLatest();
+
+  const failed = results?.find((r) => r.status === "Error");
+  if (failed) {
+    throw new Error(`Migration ${failed.migrationName} failed.`, { cause: error });
   }
+  if (error) throw error;
 }
 
 const TABLES = [
@@ -122,6 +43,10 @@ const TABLES = [
   "tasks",
   "projects",
   "settings",
+  // Kysely's own bookkeeping; leaving it behind would make the next migrate
+  // believe the baseline already ran against tables that no longer exist.
+  "kysely_migration",
+  "kysely_migration_lock",
 ] as const;
 
 export async function drop(db: Kysely<Database>): Promise<void> {
